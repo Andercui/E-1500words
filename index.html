@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="1500词">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>1500词</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<script>
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
+  });
+}
+</script>
+
+<style>
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:root{
+  color-scheme:light dark;
+  --bg:#f2f2f7; --card:#fff; --text:#1c1c1e; --text2:#6e6e73;
+  --sep:rgba(60,60,67,.16);
+  --bar-bg:rgba(242,242,247,.85);
+  --blue:#007aff; --blue-tint:rgba(0,122,255,.12);
+  --red:#ff3b30;
+  --zebra-a:#ffffff; --zebra-b:#e6e6e6;
+  --press-bg:#d7d7dc;
+  --tbl-line:#999999; --tbl-border:#000000;
+  /* PDF 字体: Segoe UI(西文)+SimSun(中文); Apple 回退: SF + Songti SC */
+  --font-tbl:"PdfTable","Segoe UI","SimSun",-apple-system,BlinkMacSystemFont,
+             "Songti SC","STSong","Songti TC","PingFang SC",
+             "Helvetica Neue",Arial,sans-serif;
+  /* PDF 字号 11.05pt, 行高 22.75pt; ×(46px/22.75pt)≈22px */
+  --fs-tbl:22px;
+  --badge1-bg:rgba(120,120,128,.14); --badge1-fg:#6e6e73;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#000; --card:#1c1c1e; --text:#f2f2f7; --text2:#98989d;
+    --sep:rgba(84,84,88,.5);
+    --blue:#0a84ff; --blue-tint:rgba(10,132,255,.2);
+    --red:#ff6961;
+    --zebra-a:#1c1c1e; --zebra-b:#2c2c2e;
+    --press-bg:#3a3a3c;
+    --tbl-line:rgba(84,84,88,.65); --tbl-border:#8e8e93;
+    --badge1-bg:rgba(120,120,128,.28); --badge1-fg:#a1a1a6;
+  }
+}
+html{background:var(--bg)}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior-y:none;touch-action:manipulation;
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms!important;animation-duration:.01ms!important}
+}
+
+/* ---------- 顶栏 ---------- */
+#topbar{
+  position:sticky;top:0;z-index:15;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(env(safe-area-inset-top) + 8px) clamp(18px,4vw,56px) 10px;
+  background:var(--bar-bg);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:.5px solid var(--sep);
+}
+#topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em}
+#sub{display:block;font-size:12px;color:var(--text2);margin-top:3px}
+.icon-btn{
+  width:38px;height:38px;border-radius:50%;border:none;padding:0;
+  background:var(--blue-tint);color:var(--blue);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.icon-btn svg{display:block}
+.icon-btn:active{transform:scale(.94)}
+.icon-btn.on{background:var(--blue);color:#fff}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+
+/* ---------- 提示条 ---------- */
+#banner{
+  background:rgba(255,159,10,.16);padding:10px clamp(18px,4vw,56px);font-size:13px;line-height:1.45;
+  border-bottom:.5px solid var(--sep);cursor:pointer;
+}
+
+/* ---------- PDF 对应字体（unicode-range 分段映射） ----------
+   PDF 原文：西文 Segoe UI + 中文 SimSun（宋体），11.05pt，regular
+   Apple 对应：西文 SF / Helvetica Neue + 中文 Songti SC（宋体）
+   分段映射可保证中西文各自使用对应字体，而非统一 fallback */
+@font-face{
+  font-family:"PdfTable";
+  src:local("Segoe UI"),local("SF Pro Text"),local("Helvetica Neue");
+  unicode-range:U+0000-024F,U+0250-02FF,U+0300-036F,U+1E00-1EFF,U+2000-206F,U+2100-214F;
+}
+@font-face{
+  font-family:"PdfTable";
+  src:local("SimSun"),local("Songti SC"),local("STSong"),local("Songti TC"),local("Noto Serif CJK SC");
+  unicode-range:U+3000-303F,U+3400-4DBF,U+4E00-9FFF,U+FF00-FFEF;
+}
+
+/* ---------- 单词表格：完全还原 PDF 结构 ----------
+   PDF 实测参数（fitz 解析，A4 595.3×841.9pt）：
+     · 左右外框竖线：#000000，0.72pt，2 条、贯穿整表
+     · 横分割线：#999999，0.72pt（表顶 + 每行之间 + 表底）
+     · 行底色：#FFFFFF / #E6E6E6 交错；行高 22.75pt；表宽 459.3pt
+     · 字体：Segoe UI（西文）+ SimSun（中文）；11.05pt；regular（全篇无粗体）
+   线宽换算：0.72pt / 22.75pt ≈ 3.2% → 行高 46px 时 ≈ 1.5px。
+   字号换算：11.05pt × (46 / 22.75) ≈ 22px → --fs-tbl
+   左列宽度：最长单词 notwithstanding 158px + 角标 ≈42px + 间距 ≈ 240px 下限
+   实现：竖线画在 .tbl 容器（与 PDF 的 2 条竖线一一对应）；
+         横线画在每行底部（+首行顶部），用渐变绘制以保证亚像素精度。 */
+#list{
+  max-width:1180px;margin:0 auto;
+  padding:0 clamp(18px,4vw,56px) calc(60px + env(safe-area-inset-bottom));
+}
+.tbl{position:relative}
+/* 表格线统一用渐变背景绘制（与 PDF 一致：0.72pt ≈ 1.5px）：
+   · 左右竖线：#000，每行各画 1.5px，叠加成贯穿 Unit 的竖线
+   · 行间横线：#999
+   与上下边线同机制绘制，保证各 DPR 下粗细表现一致 */
+.row{
+  display:grid;grid-template-columns:clamp(240px,24%,300px) 1fr;height:46px;
+  font-family:var(--font-tbl);font-size:var(--fs-tbl);font-weight:400;
+  background-color:var(--zebra-a);
+  background-image:
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-line),var(--tbl-line));
+  background-size:1.5px 100%,1.5px 100%,100% 1.5px;
+  background-position:left top,right top,left bottom;
+  background-repeat:no-repeat;
+  cursor:pointer;-webkit-user-select:none;user-select:none;overflow:hidden;
+}
+/* 每 50 词一个 Unit：区块之间留空，左上标注 Unit N + 下方装饰断线 */
+.page-sep{
+  position:relative;
+  height:34px;display:flex;align-items:flex-start;justify-content:flex-start;
+  padding:6px 0 0 2px;
+  background:transparent;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  font-size:13px;font-weight:600;letter-spacing:.05em;color:var(--text2);
+}
+/* Unit 标签下方的短横线：一条短实线，与标签左对齐，长度适中 */
+.page-sep::after{
+  content:"";position:absolute;left:2px;bottom:8px;width:44px;height:1.5px;
+  background:var(--tbl-line);border-radius:1px;
+}
+/* Unit 首行：顶部边线（#000，1.5px，与侧边同粗细）+ 左右竖线 + 底部行线 */
+.unit-body>.row:first-child{
+  background-image:
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-line),var(--tbl-line));
+  background-size:1.5px 100%,1.5px 100%,100% 1.5px,100% 1.5px;
+  background-position:left top,right top,left top,left bottom;
+}
+/* Unit 末行：底部边线（#000，1.5px，与侧边同粗细）+ 左右竖线 */
+.unit-body>.row:last-child{
+  background-image:
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-border),var(--tbl-border)),
+    linear-gradient(var(--tbl-border),var(--tbl-border));
+  background-size:1.5px 100%,1.5px 100%,100% 1.5px;
+  background-position:left top,right top,left bottom;
+}
+/* 窄屏(手机):左列收窄、字号收小(平板横屏不受影响) */
+@media (max-width:600px){
+  :root{--fs-tbl:17px}
+  .row{grid-template-columns:minmax(150px,40%) 1fr}
+}
+.row.alt{background-color:var(--zebra-b)}
+.row:active{background-color:var(--press-bg)}
+/* 展开时不变色：保留斑马纹底色，仅由右列内容的出现表明展开状态 */
+/* 默认显示模式：所有行直接显示释义（滚动懒加载填充）；点词可临时隐藏自测 */
+body.defshow .row .cell-d{display:flex}
+body.defshow .row.dhide .cell-d{display:none}
+.cell-w{display:flex;align-items:center;gap:8px;padding:0 12px;min-width:0}
+.cell-w .w{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 点击次数默认隐藏（顶栏按钮切换 body.showcounts 后显示） */
+.badge{
+  display:none;flex:0 0 auto;margin-left:auto;min-width:34px;text-align:center;font-size:13px;font-weight:600;
+  padding:2px 7px;border-radius:10px;background:var(--badge1-bg);color:var(--badge1-fg);
+}
+body.showcounts .badge:not(:empty){display:inline-block}
+.cell-d{display:none;align-items:center;gap:8px;padding:0 8px 0 12px;min-width:0}
+.row.open .cell-d{display:flex;animation:fadeIn .18s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.d-flow{flex:1 1 auto;display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden}
+.d-phon{flex:0 0 auto;color:var(--text2)}
+.d-defs{flex:0 1 auto;display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden}
+.def-line{display:flex;align-items:baseline;gap:5px;min-width:0}
+.def-line .def{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pos{
+  flex:0 0 auto;font-size:14px;font-weight:700;color:var(--blue);background:var(--blue-tint);
+  border-radius:6px;padding:1px 7px;
+}
+.d-meta{flex:0 1 auto;min-width:0;font-size:12.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif}
+.speak{
+  flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--blue-tint);color:var(--blue);
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+}
+.speak svg{width:17px;height:17px}
+.speak:active{transform:scale(.92)}
+
+/* ---------- 统计面板（底部弹层） ---------- */
+#sheet-scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;
+  opacity:0;pointer-events:none;transition:opacity .28s;
+}
+body.sheet-open #sheet-scrim{opacity:1;pointer-events:auto}
+#sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  background:var(--bg);border-radius:18px 18px 0 0;
+  max-height:86vh;max-height:86dvh;display:flex;flex-direction:column;
+  transform:translateY(110%);transition:transform .32s cubic-bezier(.32,.72,0,1);
+  box-shadow:0 -10px 40px rgba(0,0,0,.2);
+}
+body.sheet-open #sheet{transform:none}
+.s-head{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;padding:14px 18px 6px}
+.s-head h2{margin:0;font-size:17px;font-weight:700}
+.s-done{border:none;background:none;color:var(--blue);font-size:16px;font-weight:600;cursor:pointer;padding:6px 2px}
+.s-body{flex:1 1 auto;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:4px 18px 12px}
+.s-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0 14px}
+.s-card{background:var(--card);border-radius:14px;padding:12px 10px;text-align:center}
+.s-num{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.s-lab{font-size:12px;color:var(--text2);margin-top:3px}
+.chips{display:flex;gap:8px;margin:4px 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.chip{
+  flex:0 0 auto;border:none;background:var(--card);color:var(--text);
+  font-size:14px;font-weight:600;padding:7px 14px;border-radius:16px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.chip.on{background:var(--blue);color:#fff}
+.chips-lab{font-size:12px;color:var(--text2);margin:8px 0 2px}
+.s-cap{font-size:12px;color:var(--text2);margin:2px 0 8px;line-height:1.5}
+.r-row{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:.5px solid var(--sep);cursor:pointer}
+.r-row:active{background:rgba(120,120,128,.1)}
+.r-idx{flex:0 0 26px;font-size:13px;color:var(--text2);text-align:right}
+.r-w{flex:1 1 auto;font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-c{flex:0 0 auto;font-size:13px;font-weight:700;color:var(--text2);min-width:34px;text-align:right}
+.r-t{flex:0 0 auto;font-size:12px;color:var(--text2);min-width:40px;text-align:right}
+.r-empty{padding:26px 0;text-align:center;color:var(--text2);font-size:14px}
+.s-foot{
+  flex:0 0 auto;border-top:.5px solid var(--sep);
+  padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;gap:12px;background:var(--bg);
+}
+.switch-line{display:flex;align-items:center;justify-content:space-between;font-size:14px;cursor:pointer}
+.switch{position:relative;flex:0 0 auto;width:50px;height:30px}
+.switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+.switch .knob{position:absolute;inset:0;border-radius:15px;background:rgba(120,120,128,.32);transition:background .2s}
+.switch .knob::before{
+  content:"";position:absolute;top:2px;left:2px;width:26px;height:26px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform .2s;
+}
+.switch input:checked + .knob{background:#34c759}
+.switch input:checked + .knob::before{transform:translateX(20px)}
+.s-actions{display:flex;gap:10px}
+.s-btn{
+  flex:1 1 0;border:none;border-radius:12px;background:var(--card);color:var(--text);
+  font-size:14px;font-weight:600;padding:11px 0;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.s-btn:active{transform:scale(.97)}
+.s-btn.danger{color:var(--red)}
+.s-btn.primary{background:var(--blue);color:#fff}
+
+/* ---------- 导入 / 导出浮层 ---------- */
+#io{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.45)}
+body.io-open #io{display:flex}
+.io-card{
+  width:min(560px,100%);max-height:86vh;max-height:86dvh;background:var(--bg);border-radius:18px;
+  padding:18px;display:flex;flex-direction:column;gap:10px;
+}
+.io-card h3{margin:0;font-size:17px}
+.io-hint{margin:0;font-size:12.5px;color:var(--text2);line-height:1.5}
+#io-text{
+  width:100%;flex:1 1 auto;min-height:180px;resize:none;border-radius:12px;border:.5px solid var(--sep);
+  background:var(--card);color:var(--text);
+  font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:10px;
+}
+.io-btns{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.io-btns .s-btn{flex:0 0 auto;padding:11px 18px}
+
+/* ---------- Toast ---------- */
+#toast{
+  position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));z-index:70;
+  transform:translateX(-50%) translateY(16px);opacity:0;pointer-events:none;
+  background:rgba(28,28,30,.92);color:#fff;font-size:13.5px;
+  padding:9px 16px;border-radius:20px;max-width:80vw;text-align:center;
+  transition:opacity .25s,transform .25s;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-color-scheme:dark){#toast{background:rgba(235,235,245,.95);color:#000}}
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div>
+    <h1>1500词</h1>
+    <span id="sub">加载中…</span>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-counts" class="icon-btn" aria-label="显示点击次数" title="显示/隐藏点击次数">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>
+    </button>
+    <button id="btn-defshow" class="icon-btn" aria-label="释义默认隐藏；点击展开全部" title="默认显示/隐藏释义">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+    </button>
+    <button id="btn-stats" class="icon-btn" aria-label="点击统计">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 20v-9M12 20V4M19 20v-6"/></svg>
+    </button>
+  </div>
+</header>
+
+<div id="banner" hidden>当前打开方式无法保存点击记录（例如「文件」预览）。建议通过 Safari 打开本页，或用统计面板中的「导出数据」备份。</div>
+
+<div id="listwrap">
+  <main id="list"><div class="tbl" id="tbl"></div></main>
+</div>
+
+<div id="sheet-scrim"></div>
+<section id="sheet" aria-hidden="true">
+  <div class="s-head">
+    <h2>点击统计</h2>
+    <button class="s-done" id="sheet-done">完成</button>
+  </div>
+  <div class="s-body">
+    <div class="s-cards" id="s-cards"></div>
+    <div class="chips" id="chips">
+      <button class="chip on" data-f="seen">已查</button>
+      <button class="chip" data-f="unseen">未查</button>
+      <button class="chip" data-f="ge2">≥2 次</button>
+      <button class="chip" data-f="ge3">≥3 次</button>
+    </div>
+    <div class="chips-lab">按时间筛选（依据最近一次点击）</div>
+    <div class="chips" id="chips-time">
+      <button class="chip on" data-t="all">全部时间</button>
+      <button class="chip" data-t="today">今天</button>
+      <button class="chip" data-t="7d">近 7 天</button>
+      <button class="chip" data-t="30d">近 30 天</button>
+    </div>
+    <div class="s-cap" id="s-cap"></div>
+    <div id="rank"></div>
+  </div>
+  <div class="s-foot">
+    <label class="switch-line">
+      <span>打开单词时自动发音</span>
+      <span class="switch"><input type="checkbox" id="chk-auto"><span class="knob"></span></span>
+    </label>
+    <div class="s-actions">
+      <button class="s-btn" id="btn-export">导出数据</button>
+      <button class="s-btn" id="btn-import">导入数据</button>
+      <button class="s-btn danger" id="btn-clear">清空记录</button>
+    </div>
+  </div>
+</section>
+
+<div id="io">
+  <div class="io-card">
+    <h3 id="io-title">导出数据</h3>
+    <p class="io-hint" id="io-hint"></p>
+    <textarea id="io-text" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <div class="io-btns" id="io-btns"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<noscript>本页需要启用 JavaScript 才能使用。</noscript>
+
+<!-- 词库数据由 build_app.py 注入下方 script 中 -->
+<script id="app-data" type="application/json">{"words":[{"id":1,"word":"evolution","phonetic":"ˌevəˈluːʃən","segs":[{"pos":"n.","def":"进化，演变"}]},{"id":2,"word":"account","phonetic":"əˈkaʊnt","segs":[{"pos":"n.","def":"账户，描述；解释"}]},{"id":3,"word":"cover","phonetic":"ˈkʌvər","segs":[{"pos":"n.","def":"封面"},{"pos":"v.","def":"覆盖，包含"}]},{"id":4,"word":"porcelain","phonetic":"ˈpɔːrsəlɪn","segs":[{"pos":"n.","def":"瓷器"}]},{"id":5,"word":"industrial","phonetic":"ɪnˈdʌstriəl","segs":[{"pos":"adj.","def":"工业的"}]},{"id":6,"word":"raw","phonetic":"rɔː","segs":[{"pos":"adj.","def":"未经加工的；原始的"}]},{"id":7,"word":"plastic","phonetic":"ˈplæstɪk","segs":[{"pos":"n.","def":"塑料"},{"pos":"adj.","def":"塑料的"}]},{"id":8,"word":"symbolize","phonetic":"ˈsɪmbəlaɪz","segs":[{"pos":"v.","def":"象征；代表"}]},{"id":9,"word":"mysterious","phonetic":"mɪˈstɪriəs","segs":[{"pos":"adj.","def":"神秘的"}]},{"id":10,"word":"deposit","phonetic":"dɪˈpɑːzɪt","segs":[{"pos":"n.","def":"定金，沉积物"},{"pos":"v.","def":"沉积"}]},{"id":11,"word":"outdated","phonetic":"ˌaʊtˈdeɪtɪd","segs":[{"pos":"adj.","def":"过时的"}]},{"id":12,"word":"memorial","phonetic":"məˈmɔːriəl","segs":[{"pos":"n.","def":"纪念碑"}]},{"id":13,"word":"fog","phonetic":"fɑːɡ","segs":[{"pos":"n.","def":"雾"}]},{"id":14,"word":"therefore","phonetic":"ˈðerfɔːr","segs":[{"pos":"adv.","def":"因此，所以"}]},{"id":15,"word":"ceiling","phonetic":"ˈsiːlɪŋ","segs":[{"pos":"n.","def":"天花板；最高限额"}]},{"id":16,"word":"compile","phonetic":"kəmˈpaɪl","segs":[{"pos":"v.","def":"编写；汇编"}]},{"id":17,"word":"enthusiasm","phonetic":"ɪnˈθuːziæzəm","segs":[{"pos":"n.","def":"热情"}]},{"id":18,"word":"highlight","phonetic":"ˈhaɪlaɪt","segs":[{"pos":"v.","def":"强调，突出"}]},{"id":19,"word":"underline","phonetic":"ˌʌndərˈlaɪn","segs":[{"pos":"v.","def":"画底线标出，强调"}]},{"id":20,"word":"hypothesis","phonetic":"haɪˈpɑːθəsɪs","segs":[{"pos":"n.","def":"假说，假定"}]},{"id":21,"word":"feedback","phonetic":"ˈfiːdbæk","segs":[{"pos":"n.","def":"反馈"}]},{"id":22,"word":"appease","phonetic":"əˈpiːz","segs":[{"pos":"v.","def":"平息；安抚"}]},{"id":23,"word":"pendulum","phonetic":"ˈpendʒələm","segs":[{"pos":"n.","def":"钟摆"}]},{"id":24,"word":"premature","phonetic":"ˌpriːməˈtʃʊr","segs":[{"pos":"adj.","def":"早产的；未成熟的"}]},{"id":25,"word":"policy","phonetic":"ˈpɑːləsi","segs":[{"pos":"n.","def":"政策，方针"}]},{"id":26,"word":"curb","phonetic":"kɜːrb","segs":[{"pos":"v.","def":"控制，抑制"}]},{"id":27,"word":"evaporate","phonetic":"ɪˈvæpəreɪt","segs":[{"pos":"v.","def":"使蒸发，消失"}]},{"id":28,"word":"frequent","phonetic":"ˈfriːkwənt","segs":[{"pos":"adj.","def":"频繁的"}]},{"id":29,"word":"underlie","phonetic":"ˌʌndərˈlaɪ","segs":[{"pos":"v.","def":"构成...的基础"}]},{"id":30,"word":"concentrate","phonetic":"ˈkɑːnsəntreɪt","segs":[{"pos":"v.","def":"集中"}]},{"id":31,"word":"conquer","phonetic":"ˈkɑːŋkər","segs":[{"pos":"v.","def":"战胜；征服"}]},{"id":32,"word":"conjunction","phonetic":"kənˈdʒʌŋkʃən","segs":[{"pos":"n.","def":"同时发生"}]},{"id":33,"word":"disturb","phonetic":"dɪˈstɜːrb","segs":[{"pos":"v.","def":"干扰；打扰"}]},{"id":34,"word":"fiction","phonetic":"ˈfɪkʃən","segs":[{"pos":"n.","def":"小说"}]},{"id":35,"word":"depart","phonetic":"dɪˈpɑːrt","segs":[{"pos":"v.","def":"离开，离职"}]},{"id":36,"word":"conventional","phonetic":"kənˈvenʃənəl","segs":[{"pos":"adj.","def":"传统的"}]},{"id":37,"word":"specimen","phonetic":"ˈspesɪmən","segs":[{"pos":"n.","def":"标本"}]},{"id":38,"word":"transfer","phonetic":"trænsˈfɜːr","segs":[{"pos":"v.","def":"转移，调动"}]},{"id":39,"word":"capture","phonetic":"ˈkæptʃər","segs":[{"pos":"v.","def":"捕捉"}]},{"id":40,"word":"indebted","phonetic":"ɪnˈdetɪd","segs":[{"pos":"adj.","def":"负债的；感激的"}]},{"id":41,"word":"select","phonetic":"sɪˈlekt","segs":[{"pos":"v.","def":"选择，挑选"}]},{"id":42,"word":"notion","phonetic":"ˈnəʊʃən","segs":[{"pos":"n.","def":"看法；观念"}]},{"id":43,"word":"inform","phonetic":"ɪnˈfɔːrm","segs":[{"pos":"v.","def":"通知"}]},{"id":44,"word":"fragile","phonetic":"ˈfrædʒaɪl","segs":[{"pos":"adj.","def":"脆弱的，易碎的"}]},{"id":45,"word":"interrogate","phonetic":"ɪnˈterəɡeɪt","segs":[{"pos":"v.","def":"审问；讯问"}]},{"id":46,"word":"reassure","phonetic":"ˌriːəˈʃʊər","segs":[{"pos":"v.","def":"使安心；使消除疑虑"}]},{"id":47,"word":"involve","phonetic":"ɪnˈvɑːlv","segs":[{"pos":"v.","def":"涉及，加入"}]},{"id":48,"word":"compatible","phonetic":"kəmˈpætəbəl","segs":[{"pos":"adj.","def":"兼容的"}]},{"id":49,"word":"secure","phonetic":"səˈkjʊr","segs":[{"pos":"adj.","def":"安全的"}]},{"id":50,"word":"consequence","phonetic":"ˈkɑːnsɪkwens","segs":[{"pos":"n.","def":"结果；后果；影响"}]},{"id":51,"word":"decent","phonetic":"ˈdiːsənt","segs":[{"pos":"adj.","def":"得体的，像样的"}]},{"id":52,"word":"economical","phonetic":"ˌiːkəˈnɑːmɪkəl","segs":[{"pos":"adj.","def":"节约的"}]},{"id":53,"word":"unfold","phonetic":"ʌnˈfoʊld","segs":[{"pos":"v.","def":"打开；呈现"}]},{"id":54,"word":"adverse","phonetic":"ˈædvɜːrs","segs":[{"pos":"adj.","def":"不利的，反面的"}]},{"id":55,"word":"intimate","phonetic":"ˈɪntɪmət","segs":[{"pos":"adj.","def":"亲密的"}]},{"id":56,"word":"coalition","phonetic":"ˌkoʊəˈlɪʃən","segs":[{"pos":"n.","def":"联合政府"}]},{"id":57,"word":"odd","phonetic":"ɑːd","segs":[{"pos":"adj.","def":"奇怪的；单数的"}]},{"id":58,"word":"assemble","phonetic":"əˈsembəl","segs":[{"pos":"v.","def":"集合；收集"}]},{"id":59,"word":"wardrobe","phonetic":"ˈwɔːrdroʊb","segs":[{"pos":"n.","def":"衣柜"}]},{"id":60,"word":"ambition","phonetic":"æmˈbɪʃən","segs":[{"pos":"n.","def":"野心；雄心"}]},{"id":61,"word":"delay","phonetic":"dɪˈleɪ","segs":[{"pos":"v.","def":"延迟"}]},{"id":62,"word":"restaurant","phonetic":"ˈrestərɑːnt","segs":[{"pos":"n.","def":"餐厅"}]},{"id":63,"word":"authorize","phonetic":"ˈɔːθəraɪz","segs":[{"pos":"v.","def":"批准；授权"}]},{"id":64,"word":"remark","phonetic":"rɪˈmɑːrk","segs":[{"pos":"n.","def":"评论"}]},{"id":65,"word":"banknote","phonetic":"ˈbæŋknoʊt","segs":[{"pos":"n.","def":"钞票，纸币"}]},{"id":66,"word":"barrier","phonetic":"ˈbæriər","segs":[{"pos":"n.","def":"障碍，屏障"}]},{"id":67,"word":"cooperate","phonetic":"koʊˈɑːpəreɪt","segs":[{"pos":"v.","def":"合作"}]},{"id":68,"word":"illusion","phonetic":"ɪˈluːʒən","segs":[{"pos":"n.","def":"幻想"}]},{"id":69,"word":"fashion","phonetic":"ˈfæʃən","segs":[{"pos":"n.","def":"时尚，方式"}]},{"id":70,"word":"expertise","phonetic":"ˌekspɜːrˈtiːz","segs":[{"pos":"n.","def":"专长；专门技能"}]},{"id":71,"word":"include","phonetic":"ɪnˈkluːd","segs":[{"pos":"v.","def":"包括"}]},{"id":72,"word":"method","phonetic":"ˈmeθəd","segs":[{"pos":"n.","def":"方法"}]},{"id":73,"word":"abolish","phonetic":"əˈbɑːlɪʃ","segs":[{"pos":"v.","def":"废除，废止"}]},{"id":74,"word":"diabetes","phonetic":"ˌdaɪəˈbiːtiːz","segs":[{"pos":"n.","def":"糖尿病"}]},{"id":75,"word":"maintain","phonetic":"meɪnˈteɪn","segs":[{"pos":"v.","def":"维持，维修，坚持"}]},{"id":76,"word":"microscope","phonetic":"ˈmaɪkrəskoʊp","segs":[{"pos":"n.","def":"显微镜"}]},{"id":77,"word":"instead","phonetic":"ɪnˈsted","segs":[{"pos":"adv.","def":"代替，反而"}]},{"id":78,"word":"indifferent","phonetic":"ɪnˈdɪfərənt","segs":[{"pos":"adj.","def":"漠不关心的"}]},{"id":79,"word":"defend","phonetic":"dɪˈfend","segs":[{"pos":"v.","def":"保卫；防御；为...辩解"}]},{"id":80,"word":"double","phonetic":"ˈdʌbəl","segs":[{"pos":"adj.","def":"两倍的"},{"pos":"v.","def":"加倍"}]},{"id":81,"word":"ventilate","phonetic":"ˈventɪleɪt","segs":[{"pos":"v.","def":"使通风；公开表达"}]},{"id":82,"word":"distract","phonetic":"dɪˈstrækt","segs":[{"pos":"v.","def":"使分心"}]},{"id":83,"word":"organization","phonetic":"ˌɔːrɡənɪˈzeɪʃən","segs":[{"pos":"n.","def":"组织"}]},{"id":84,"word":"furthermore","phonetic":"ˌfɜːrðərˈmɔːr","segs":[{"pos":"adv.","def":"此外，而且"}]},{"id":85,"word":"flexible","phonetic":"ˈfleksəbəl","segs":[{"pos":"adj.","def":"灵活的"}]},{"id":86,"word":"pesticide","phonetic":"ˈpestɪsaɪd","segs":[{"pos":"n.","def":"杀虫剂"}]},{"id":87,"word":"decrease","phonetic":"dɪˈkriːs","segs":[{"pos":"v./n.","def":"减少"}]},{"id":88,"word":"comment","phonetic":"ˈkɑːment","segs":[{"pos":"n./v.","def":"评论"}]},{"id":89,"word":"feasible","phonetic":"ˈfiːzəbəl","segs":[{"pos":"adj.","def":"可行的"}]},{"id":90,"word":"campus","phonetic":"ˈkæmpəs","segs":[{"pos":"n.","def":"（大学）校园"}]},{"id":91,"word":"blackmail","phonetic":"ˈblækmeɪl","segs":[{"pos":"v.","def":"勒索；敲诈"}]},{"id":92,"word":"delicate","phonetic":"ˈdelɪkət","segs":[{"pos":"adj.","def":"精致的；易碎的"}]},{"id":93,"word":"speculate","phonetic":"ˈspekjuleɪt","segs":[{"pos":"v.","def":"推测；猜测；投机"}]},{"id":94,"word":"board","phonetic":"bɔːrd","segs":[{"pos":"n.","def":"木板，董事会"}]},{"id":95,"word":"testify","phonetic":"ˈtestɪfaɪ","segs":[{"pos":"v.","def":"作证；证明"}]},{"id":96,"word":"encourage","phonetic":"ɪnˈkɜːrɪdʒ","segs":[{"pos":"v.","def":"鼓励"}]},{"id":97,"word":"habitat","phonetic":"ˈhæbɪtæt","segs":[{"pos":"n.","def":"栖息地"}]},{"id":98,"word":"infant","phonetic":"ˈɪnfənt","segs":[{"pos":"adj.","def":"初期的"},{"pos":"n.","def":"婴儿，幼儿"}]},{"id":99,"word":"hazard","phonetic":"ˈhæzərd","segs":[{"pos":"n.","def":"危险；风险"}]},{"id":100,"word":"provide","phonetic":"prəˈvaɪd","segs":[{"pos":"v.","def":"提供"}]},{"id":101,"word":"individual","phonetic":"ˌɪndɪˈvɪdʒuəl","segs":[{"pos":"n.","def":"个人，个体"},{"pos":"adj.","def":"个人的，个体的，独特的"}]},{"id":102,"word":"household","phonetic":"ˈhaʊshoʊld","segs":[{"pos":"adj.","def":"家庭的，家用的；家喻户晓的"}]},{"id":103,"word":"dismiss","phonetic":"dɪsˈmɪs","segs":[{"pos":"v.","def":"消除，解散，不考虑"}]},{"id":104,"word":"cast","phonetic":"kæst","segs":[{"pos":"v.","def":"投射；向...抛"}]},{"id":105,"word":"patent","phonetic":"ˈpætənt","segs":[{"pos":"n.","def":"专利权"},{"pos":"adj.","def":"有专利权的"}]},{"id":106,"word":"redundant","phonetic":"rɪˈdʌndənt","segs":[{"pos":"adj.","def":"多余的，被裁减的"}]},{"id":107,"word":"objective","phonetic":"əbˈdʒektɪv","segs":[{"pos":"n.","def":"目标"},{"pos":"adj.","def":"客观的"}]},{"id":108,"word":"welfare","phonetic":"ˈwelfər","segs":[{"pos":"n.","def":"幸福，福利"}]},{"id":109,"word":"encounter","phonetic":"ɪnˈkaʊntər","segs":[{"pos":"v.","def":"遭遇，碰到"}]},{"id":110,"word":"antibiotics","phonetic":"ˌæntibaɪˈɑːtɪks","segs":[{"pos":"n.","def":"抗生素(复数)"}]},{"id":111,"word":"discourage","phonetic":"dɪsˈkɜːrɪdʒ","segs":[{"pos":"v.","def":"使泄气，阻止"}]},{"id":112,"word":"govern","phonetic":"ˈɡʌvərn","segs":[{"pos":"v.","def":"统治，支配"}]},{"id":113,"word":"conducive","phonetic":"kənˈduːsɪv","segs":[{"pos":"adj.","def":"有助于...；有益于"}]},{"id":114,"word":"punctual","phonetic":"ˈpʌŋktʃuəl","segs":[{"pos":"adj.","def":"准时的"}]},{"id":115,"word":"subjective","phonetic":"səbˈdʒektɪv","segs":[{"pos":"adj.","def":"主观的"}]},{"id":116,"word":"shrink","phonetic":"ʃrɪŋk","segs":[{"pos":"v.","def":"收缩；缩小"}]},{"id":117,"word":"wrestle","phonetic":"ˈresəl","segs":[{"pos":"v.","def":"扭打；摔跤；尝试解决"}]},{"id":118,"word":"admit","phonetic":"ədˈmɪt","segs":[{"pos":"v.","def":"承认"}]},{"id":119,"word":"bypass","phonetic":"ˈbaɪpæs","segs":[{"pos":"v.","def":"避开"},{"pos":"n.","def":"旁道；搭桥术"}]},{"id":120,"word":"evade","phonetic":"ɪˈveɪd","segs":[{"pos":"v.","def":"避免；逃避"}]},{"id":121,"word":"accelerate","phonetic":"əkˈseləreɪt","segs":[{"pos":"v.","def":"加速；加快"}]},{"id":122,"word":"nourish","phonetic":"ˈnɜːrɪʃ","segs":[{"pos":"v.","def":"抚养；滋养"}]},{"id":123,"word":"sufficient","phonetic":"səˈfɪʃənt","segs":[{"pos":"adj.","def":"充足的，足够的"}]},{"id":124,"word":"headmaster","phonetic":"ˌhedˈmæstər","segs":[{"pos":"n.","def":"校长"}]},{"id":125,"word":"visible","phonetic":"ˈvɪzəbəl","segs":[{"pos":"adj.","def":"明显的，可见的"}]},{"id":126,"word":"uncover","phonetic":"ʌnˈkʌvər","segs":[{"pos":"v.","def":"发现"}]},{"id":127,"word":"moist","phonetic":"mɔɪst","segs":[{"pos":"adj.","def":"湿润的"}]},{"id":128,"word":"content","phonetic":"ˈkɑːntent","segs":[{"pos":"n.","def":"内容"},{"pos":"adj.","def":"满意的"}]},{"id":129,"word":"source","phonetic":"sɔːrs","segs":[{"pos":"n.","def":"来源"}]},{"id":130,"word":"identify","phonetic":"aɪˈdentɪfaɪ","segs":[{"pos":"v.","def":"识别，确认"}]},{"id":131,"word":"flu","phonetic":"fluː","segs":[{"pos":"n.","def":"流感"}]},{"id":132,"word":"screen","phonetic":"skriːn","segs":[{"pos":"n.","def":"屏幕"},{"pos":"v.","def":"筛检，保护"}]},{"id":133,"word":"neutral","phonetic":"ˈnuːtrəl","segs":[{"pos":"adj.","def":"中立的，中性的"}]},{"id":134,"word":"erect","phonetic":"ɪˈrekt","segs":[{"pos":"v.","def":"建立；创立"}]},{"id":135,"word":"rare","phonetic":"rer","segs":[{"pos":"adj.","def":"稀有的，稀少的"}]},{"id":136,"word":"notwithstanding","phonetic":"ˌnɑːtwɪθˈstændɪŋ","segs":[{"pos":"prep.","def":"尽管"}]},{"id":137,"word":"charge","phonetic":"tʃɑːrdʒ","segs":[{"pos":"v.","def":"充电，收费"},{"pos":"n.","def":"电荷，指控"}]},{"id":138,"word":"imply","phonetic":"ɪmˈplaɪ","segs":[{"pos":"v.","def":"暗示，表明"}]},{"id":139,"word":"profile","phonetic":"ˈproʊfaɪl","segs":[{"pos":"n.","def":"侧面轮廓"},{"pos":"v.","def":"概述"}]},{"id":140,"word":"appoint","phonetic":"əˈpɔɪnt","segs":[{"pos":"v.","def":"任命"}]},{"id":141,"word":"ingredient","phonetic":"ɪnˈɡriːdiənt","segs":[{"pos":"n.","def":"成分，原料"}]},{"id":142,"word":"sophisticated","phonetic":"səˈfɪstɪkeɪtɪd","segs":[{"pos":"adj.","def":"老练的"}]},{"id":143,"word":"levy","phonetic":"ˈlevi","segs":[{"pos":"n.","def":"征税"},{"pos":"v.","def":"征税"}]},{"id":144,"word":"opportunity","phonetic":"ˌɑːpərˈtuːnəti","segs":[{"pos":"n.","def":"机会"}]},{"id":145,"word":"concede","phonetic":"kənˈsiːd","segs":[{"pos":"v.","def":"承认；让步"}]},{"id":146,"word":"emerge","phonetic":"iˈmɜːrdʒ","segs":[{"pos":"v.","def":"出现，显现"}]},{"id":147,"word":"vision","phonetic":"ˈvɪʒən","segs":[{"pos":"n.","def":"视力，视觉"}]},{"id":148,"word":"solve","phonetic":"sɑːlv","segs":[{"pos":"v.","def":"解决，处理"}]},{"id":149,"word":"arouse","phonetic":"əˈraʊz","segs":[{"pos":"v.","def":"引起；激发"}]},{"id":150,"word":"tidy","phonetic":"ˈtaɪdi","segs":[{"pos":"adj.","def":"整洁的"}]},{"id":151,"word":"overstate","phonetic":"ˌoʊvərˈsteɪt","segs":[{"pos":"v.","def":"夸大"}]},{"id":152,"word":"maximum","phonetic":"ˈmæksɪməm","segs":[{"pos":"n.","def":"最大量"}]},{"id":153,"word":"apology","phonetic":"əˈpɑːlədʒi","segs":[{"pos":"n.","def":"道歉"}]},{"id":154,"word":"shallow","phonetic":"ˈʃæloʊ","segs":[{"pos":"adj.","def":"肤浅的"}]},{"id":155,"word":"rough","phonetic":"rʌf","segs":[{"pos":"adj.","def":"粗糙的；大致的"}]},{"id":156,"word":"accordance","phonetic":"əˈkɔːrdns","segs":[{"pos":"n.","def":"一致；符合"}]},{"id":157,"word":"effect","phonetic":"ɪˈfekt","segs":[{"pos":"n.","def":"影响，效果"},{"pos":"v.","def":"引起，使发生"}]},{"id":158,"word":"persuade","phonetic":"pərˈsweɪd","segs":[{"pos":"v.","def":"说服；使信服"}]},{"id":159,"word":"retrospect","phonetic":"ˈretrəspekt","segs":[{"pos":"v.","def":"回想；回顾"}]},{"id":160,"word":"hostile","phonetic":"ˈhɑːstəl","segs":[{"pos":"adj.","def":"敌对的，恶劣的"}]},{"id":161,"word":"portray","phonetic":"pɔːrˈtreɪ","segs":[{"pos":"v.","def":"描写；描绘"}]},{"id":162,"word":"achieve","phonetic":"əˈtʃiːv","segs":[{"pos":"v.","def":"达到，完成"}]},{"id":163,"word":"million","phonetic":"ˈmɪljən","segs":[{"pos":"n.","def":"百万"}]},{"id":164,"word":"nuclear","phonetic":"ˈnuːkliər","segs":[{"pos":"adj.","def":"核能的"}]},{"id":165,"word":"precaution","phonetic":"prɪˈkɔːʃən","segs":[{"pos":"n.","def":"预防措施"}]},{"id":166,"word":"foresee","phonetic":"fɔːrˈsiː","segs":[{"pos":"v.","def":"预料，预知"}]},{"id":167,"word":"transient","phonetic":"ˈtrænziənt","segs":[{"pos":"adj.","def":"短暂的"}]},{"id":168,"word":"platform","phonetic":"ˈplætfɔːrm","segs":[{"pos":"n.","def":"平台"}]},{"id":169,"word":"plain","phonetic":"pleɪn","segs":[{"pos":"adj.","def":"清晰的，坦诚的"}]},{"id":170,"word":"locomotive","phonetic":"ˌloʊkəˈmoʊtɪv","segs":[{"pos":"adj.","def":"移动的"}]},{"id":171,"word":"judge","phonetic":"dʒʌdʒ","segs":[{"pos":"v.","def":"判断"},{"pos":"n.","def":"法官，裁判员"}]},{"id":172,"word":"circumstance","phonetic":"ˈsɜːrkəmstæns","segs":[{"pos":"n.","def":"环境，条件"}]},{"id":173,"word":"robust","phonetic":"roʊˈbʌst","segs":[{"pos":"adj.","def":"强健的，结实的"}]},{"id":174,"word":"responsibility","phonetic":"rɪˌspɑːnsəˈbɪləti","segs":[{"pos":"n.","def":"责任"}]},{"id":175,"word":"compass","phonetic":"ˈkʌmpəs","segs":[{"pos":"n.","def":"指南针"}]},{"id":176,"word":"vacant","phonetic":"ˈveɪkənt","segs":[{"pos":"adj.","def":"空的，未占用的"}]},{"id":177,"word":"pledge","phonetic":"pledʒ","segs":[{"pos":"v./n.","def":"保证；承诺"}]},{"id":178,"word":"simultaneous","phonetic":"ˌsaɪməlˈteɪniəs","segs":[{"pos":"adj.","def":"同步的"}]},{"id":179,"word":"contribute","phonetic":"kənˈtrɪbjuːt","segs":[{"pos":"v.","def":"贡献，促成"}]},{"id":180,"word":"cluster","phonetic":"ˈklʌstər","segs":[{"pos":"v.","def":"聚集"},{"pos":"n.","def":"群"}]},{"id":181,"word":"culture","phonetic":"ˈkʌltʃər","segs":[{"pos":"n.","def":"文化"}]},{"id":182,"word":"stale","phonetic":"steɪl","segs":[{"pos":"adj.","def":"不新鲜的；老掉牙的"}]},{"id":183,"word":"venture","phonetic":"ˈventʃər","segs":[{"pos":"n.","def":"（风险）企业"},{"pos":"v.","def":"冒险"}]},{"id":184,"word":"mutual","phonetic":"ˈmjuːtʃuəl","segs":[{"pos":"adj.","def":"相互的"}]},{"id":185,"word":"irregular","phonetic":"ɪˈreɡjələr","segs":[{"pos":"adj.","def":"不规则的"}]},{"id":186,"word":"pure","phonetic":"pjʊr","segs":[{"pos":"adj.","def":"纯粹的，干净的"}]},{"id":187,"word":"psychology","phonetic":"saɪˈkɑːlədʒi","segs":[{"pos":"n.","def":"心理学"}]},{"id":188,"word":"incorporate","phonetic":"ɪnˈkɔːrpəreɪt","segs":[{"pos":"v.","def":"包含，使并入"}]},{"id":189,"word":"acupuncture","phonetic":"ˈækjupʌŋktʃər","segs":[{"pos":"n.","def":"针灸"}]},{"id":190,"word":"environment","phonetic":"ɪnˈvaɪrənmənt","segs":[{"pos":"n.","def":"环境"}]},{"id":191,"word":"appear","phonetic":"əˈpɪr","segs":[{"pos":"v.","def":"出现，似乎"}]},{"id":192,"word":"propel","phonetic":"prəˈpel","segs":[{"pos":"v.","def":"推动；驱使"}]},{"id":193,"word":"workforce","phonetic":"ˈwɜːrkfɔːrs","segs":[{"pos":"n.","def":"劳动力，全体员工"}]},{"id":194,"word":"insurance","phonetic":"ɪnˈʃʊrəns","segs":[{"pos":"n.","def":"保险"}]},{"id":195,"word":"entail","phonetic":"ɪnˈteɪl","segs":[{"pos":"v.","def":"包含，牵涉"}]},{"id":196,"word":"goal","phonetic":"goʊl","segs":[{"pos":"n.","def":"目标"}]},{"id":197,"word":"uniform","phonetic":"ˈjuːnɪfɔːrm","segs":[{"pos":"adj.","def":"统一的"},{"pos":"n.","def":"制服"}]},{"id":198,"word":"empirical","phonetic":"ɪmˈpɪrɪkəl","segs":[{"pos":"adj.","def":"经验主义的"}]},{"id":199,"word":"velocity","phonetic":"vəˈlɑːsəti","segs":[{"pos":"n.","def":"速度"}]},{"id":200,"word":"terminal","phonetic":"ˈtɜːrmɪnəl","segs":[{"pos":"adj.","def":"晚期的，末端的"}]},{"id":201,"word":"locate","phonetic":"ˈloʊkeɪt","segs":[{"pos":"v.","def":"位于"}]},{"id":202,"word":"chief","phonetic":"tʃiːf","segs":[{"pos":"adj.","def":"主要的，首要的"}]},{"id":203,"word":"sample","phonetic":"ˈsæmpəl","segs":[{"pos":"n.","def":"样本"}]},{"id":204,"word":"advocate","phonetic":"ˈædvəkeɪt","segs":[{"pos":"v.","def":"拥护，支持"}]},{"id":205,"word":"mansion","phonetic":"ˈmænʃən","segs":[{"pos":"n.","def":"公馆；大宅"}]},{"id":206,"word":"publish","phonetic":"ˈpʌblɪʃ","segs":[{"pos":"v.","def":"出版，发行"}]},{"id":207,"word":"compliment","phonetic":"ˈkɑːmplɪmənt","segs":[{"pos":"v./n.","def":"赞扬；称赞"}]},{"id":208,"word":"explicit","phonetic":"ɪkˈsplɪsɪt","segs":[{"pos":"adj.","def":"明确的"}]},{"id":209,"word":"official","phonetic":"əˈfɪʃəl","segs":[{"pos":"adj.","def":"官方的"},{"pos":"n.","def":"官员"}]},{"id":210,"word":"scope","phonetic":"skoʊp","segs":[{"pos":"n.","def":"范围，能力"}]},{"id":211,"word":"reception","phonetic":"rɪˈsepʃən","segs":[{"pos":"n.","def":"接待，招待"}]},{"id":212,"word":"conscious","phonetic":"ˈkɑːnʃəs","segs":[{"pos":"adj.","def":"有意识的，意识到的"}]},{"id":213,"word":"tangible","phonetic":"ˈtændʒəbəl","segs":[{"pos":"adj.","def":"有形的"}]},{"id":214,"word":"medical","phonetic":"ˈmedɪkəl","segs":[{"pos":"adj.","def":"医疗的"}]},{"id":215,"word":"figure","phonetic":"ˈfɪɡjər","segs":[{"pos":"n.","def":"数字，人物，身材"}]},{"id":216,"word":"magnify","phonetic":"ˈmæɡnɪfaɪ","segs":[{"pos":"v.","def":"放大，夸大"}]},{"id":217,"word":"blast","phonetic":"blæst","segs":[{"pos":"n./v.","def":"爆炸"}]},{"id":218,"word":"condense","phonetic":"kənˈdens","segs":[{"pos":"v.","def":"使浓缩；使冷凝"}]},{"id":219,"word":"continent","phonetic":"ˈkɑːntɪnənt","segs":[{"pos":"n.","def":"大陆；洲"}]},{"id":220,"word":"hijack","phonetic":"ˈhaɪdʒæk","segs":[{"pos":"v.","def":"劫持"}]},{"id":221,"word":"perspective","phonetic":"pərˈspektɪv","segs":[{"pos":"n.","def":"观点，视角"}]},{"id":222,"word":"diminish","phonetic":"dɪˈmɪnɪʃ","segs":[{"pos":"v.","def":"减少，减弱"}]},{"id":223,"word":"attach","phonetic":"əˈtætʃ","segs":[{"pos":"v.","def":"固定；附上，认为有重要性"}]},{"id":224,"word":"appraise","phonetic":"əˈpreɪz","segs":[{"pos":"v.","def":"估计；评价"}]},{"id":225,"word":"dictionary","phonetic":"ˈdɪkʃəneri","segs":[{"pos":"n.","def":"字典"}]},{"id":226,"word":"panorama","phonetic":"ˌpænəˈræmə","segs":[{"pos":"n.","def":"全景"}]},{"id":227,"word":"remove","phonetic":"rɪˈmuːv","segs":[{"pos":"v.","def":"移动，免除"}]},{"id":228,"word":"proportion","phonetic":"prəˈpɔːrʃən","segs":[{"pos":"n.","def":"比例"}]},{"id":229,"word":"veteran","phonetic":"ˈvetərən","segs":[{"pos":"n.","def":"老兵；老手"}]},{"id":230,"word":"legacy","phonetic":"ˈleɡəsi","segs":[{"pos":"n.","def":"遗产"}]},{"id":231,"word":"combat","phonetic":"ˈkɑːmbæt","segs":[{"pos":"v.","def":"防止；减轻"},{"pos":"n.","def":"战斗"}]},{"id":232,"word":"resist","phonetic":"rɪˈzɪst","segs":[{"pos":"v.","def":"反对，抵制"}]},{"id":233,"word":"contagious","phonetic":"kənˈteɪdʒəs","segs":[{"pos":"adj.","def":"接触传染的"}]},{"id":234,"word":"exquisite","phonetic":"ɪkˈskwɪzɪt","segs":[{"pos":"adj.","def":"精美的"}]},{"id":235,"word":"affair","phonetic":"əˈfer","segs":[{"pos":"n.","def":"公共事务；事情；暧昧关系"}]},{"id":236,"word":"setback","phonetic":"ˈsetbæk","segs":[{"pos":"n.","def":"挫折"}]},{"id":237,"word":"spare","phonetic":"speər","segs":[{"pos":"adj.","def":"备用的，闲置的"}]},{"id":238,"word":"gap","phonetic":"ɡæp","segs":[{"pos":"n.","def":"间隔，分歧"}]},{"id":239,"word":"inevitable","phonetic":"ɪnˈevɪtəbəl","segs":[{"pos":"adj.","def":"不可避免的"}]},{"id":240,"word":"legislation","phonetic":"ˌledʒɪˈsleɪʃən","segs":[{"pos":"n.","def":"立法"}]},{"id":241,"word":"swing","phonetic":"swɪŋ","segs":[{"pos":"n./v.","def":"摇动；改变"}]},{"id":242,"word":"amass","phonetic":"əˈmæs","segs":[{"pos":"v.","def":"积累；聚集"}]},{"id":243,"word":"exceptional","phonetic":"ɪkˈsepʃənəl","segs":[{"pos":"adj.","def":"例外的，杰出的"}]},{"id":244,"word":"tough","phonetic":"tʌf","segs":[{"pos":"adj.","def":"艰苦的，困难的，坚韧的"}]},{"id":245,"word":"enlarge","phonetic":"ɪnˈlɑːrdʒ","segs":[{"pos":"v.","def":"扩大，扩充"}]},{"id":246,"word":"trace","phonetic":"treɪs","segs":[{"pos":"v.","def":"追踪"},{"pos":"n.","def":"踪迹"}]},{"id":247,"word":"increase","phonetic":"ɪnˈkriːs","segs":[{"pos":"v./n.","def":"增加"}]},{"id":248,"word":"superstition","phonetic":"ˌsuːpərˈstɪʃən","segs":[{"pos":"n.","def":"迷信"}]},{"id":249,"word":"guard","phonetic":"ɡɑːrd","segs":[{"pos":"v.","def":"守卫"}]},{"id":250,"word":"transparent","phonetic":"trænsˈpærənt","segs":[{"pos":"adj.","def":"透明的"}]},{"id":251,"word":"harsh","phonetic":"hɑːrʃ","segs":[{"pos":"adj.","def":"残酷的，严厉的"}]},{"id":252,"word":"acid","phonetic":"ˈæsɪd","segs":[{"pos":"adj.","def":"酸的"}]},{"id":253,"word":"bind","phonetic":"baɪnd","segs":[{"pos":"v.","def":"捆绑"},{"pos":"n.","def":"窘境"}]},{"id":254,"word":"elaborate","phonetic":"ɪˈlæbərət","segs":[{"pos":"adj.","def":"精心制作的"}]},{"id":255,"word":"criticize","phonetic":"ˈkrɪtɪsaɪz","segs":[{"pos":"v.","def":"批评"}]},{"id":256,"word":"feed","phonetic":"fiːd","segs":[{"pos":"v.","def":"喂养"}]},{"id":257,"word":"formulate","phonetic":"ˈfɔːrmjuleɪt","segs":[{"pos":"v.","def":"构想，制定"}]},{"id":258,"word":"genuine","phonetic":"ˈdʒenjuɪn","segs":[{"pos":"adj.","def":"真正的，真诚的"}]},{"id":259,"word":"discern","phonetic":"dɪˈsɜːrn","segs":[{"pos":"v.","def":"辨别；识别"}]},{"id":260,"word":"plunge","phonetic":"plʌndʒ","segs":[{"pos":"v.","def":"骤降，急跌；突然下落"}]},{"id":261,"word":"transit","phonetic":"ˈtrænzɪt","segs":[{"pos":"v.","def":"运输"}]},{"id":262,"word":"prospect","phonetic":"ˈprɑːspekt","segs":[{"pos":"n.","def":"前景"}]},{"id":263,"word":"desert","phonetic":"ˈdezərt","segs":[{"pos":"n.","def":"沙漠；[dɪˈzɜːrt]"},{"pos":"v.","def":"抛弃"}]},{"id":264,"word":"casualty","phonetic":"ˈkæʒuəlti","segs":[{"pos":"n.","def":"死伤者"}]},{"id":265,"word":"function","phonetic":"ˈfʌŋkʃən","segs":[{"pos":"n.","def":"功能"},{"pos":"v.","def":"运作"}]},{"id":266,"word":"establish","phonetic":"ɪˈstæblɪʃ","segs":[{"pos":"v.","def":"建立，确定"}]},{"id":267,"word":"greed","phonetic":"ɡriːd","segs":[{"pos":"n.","def":"贪婪；贪心"}]},{"id":268,"word":"fancy","phonetic":"ˈfænsi","segs":[{"pos":"v.","def":"想做"},{"pos":"adj.","def":"精致的，绚丽的"}]},{"id":269,"word":"throne","phonetic":"θroʊn","segs":[{"pos":"n.","def":"王座，王位"}]},{"id":270,"word":"signify","phonetic":"ˈsɪɡnɪfaɪ","segs":[{"pos":"v.","def":"表示；预示"}]},{"id":271,"word":"homogeneous","phonetic":"ˌhoʊməˈdʒiːniəs","segs":[{"pos":"adj.","def":"同种类的"}]},{"id":272,"word":"indicate","phonetic":"ˈɪndɪkeɪt","segs":[{"pos":"v.","def":"表明"}]},{"id":273,"word":"agony","phonetic":"ˈæɡəni","segs":[{"pos":"n.","def":"痛苦"}]},{"id":274,"word":"furniture","phonetic":"ˈfɜːrnɪtʃər","segs":[{"pos":"n.","def":"家具"}]},{"id":275,"word":"consecutive","phonetic":"kənˈsekjətɪv","segs":[{"pos":"adj.","def":"连续不断的"}]},{"id":276,"word":"contrast","phonetic":"ˈkɑːntræst","segs":[{"pos":"n./v.","def":"对比"}]},{"id":277,"word":"pile","phonetic":"paɪl","segs":[{"pos":"n.","def":"堆；大量"},{"pos":"v.","def":"堆放；摞起"}]},{"id":278,"word":"normal","phonetic":"ˈnɔːrməl","segs":[{"pos":"adj.","def":"正常的"}]},{"id":279,"word":"exaggerate","phonetic":"ɪɡˈzædʒəreɪt","segs":[{"pos":"v.","def":"夸大，夸张"}]},{"id":280,"word":"phenomenon","phonetic":"fəˈnɑːmɪnən","segs":[{"pos":"n.","def":"现象"}]},{"id":281,"word":"adolescent","phonetic":"ˌædəˈlesənt","segs":[{"pos":"n.","def":"青少年"}]},{"id":282,"word":"breathe","phonetic":"briːð","segs":[{"pos":"v.","def":"呼吸"}]},{"id":283,"word":"obvious","phonetic":"ˈɑːbviəs","segs":[{"pos":"adj.","def":"明显的"}]},{"id":284,"word":"circuit","phonetic":"ˈsɜːrkɪt","segs":[{"pos":"n.","def":"电路；环行；巡回"}]},{"id":285,"word":"parliament","phonetic":"ˈpɑːrləmənt","segs":[{"pos":"n.","def":"议会；英国议会"}]},{"id":286,"word":"campaign","phonetic":"kæmˈpeɪn","segs":[{"pos":"n.","def":"运动，战役"}]},{"id":287,"word":"incident","phonetic":"ˈɪnsɪdənt","segs":[{"pos":"n.","def":"事件"}]},{"id":288,"word":"interact","phonetic":"ˌɪntərˈækt","segs":[{"pos":"v.","def":"互动"}]},{"id":289,"word":"upgrade","phonetic":"ʌpˈɡreɪd","segs":[{"pos":"v.","def":"升级；提升"}]},{"id":290,"word":"entity","phonetic":"ˈentəti","segs":[{"pos":"n.","def":"实体"}]},{"id":291,"word":"transition","phonetic":"trænˈzɪʃən","segs":[{"pos":"n.","def":"过渡，转变"}]},{"id":292,"word":"range","phonetic":"reɪndʒ","segs":[{"pos":"n.","def":"一系列，范围"}]},{"id":293,"word":"interpret","phonetic":"ɪnˈtɜːrprət","segs":[{"pos":"v.","def":"解释；口译"}]},{"id":294,"word":"mature","phonetic":"məˈtʃʊr","segs":[{"pos":"adj.","def":"成熟的"}]},{"id":295,"word":"primary","phonetic":"ˈpraɪmeri","segs":[{"pos":"adj.","def":"主要的，最初的"}]},{"id":296,"word":"native","phonetic":"ˈneɪtɪv","segs":[{"pos":"adj.","def":"本地的"},{"pos":"n.","def":"本地人"}]},{"id":297,"word":"perpetual","phonetic":"pərˈpetʃuəl","segs":[{"pos":"adj.","def":"持续的；终身的"}]},{"id":298,"word":"privilege","phonetic":"ˈprɪvəlɪdʒ","segs":[{"pos":"n.","def":"特权，优惠"}]},{"id":299,"word":"appall","phonetic":"əˈpɔːl","segs":[{"pos":"v.","def":"使震惊；使惊骇"}]},{"id":300,"word":"architecture","phonetic":"ˈɑːrkɪtektʃər","segs":[{"pos":"n.","def":"建筑学"}]},{"id":301,"word":"fetch","phonetic":"fetʃ","segs":[{"pos":"v.","def":"取来；售得，卖得"}]},{"id":302,"word":"retire","phonetic":"rɪˈtaɪər","segs":[{"pos":"v.","def":"退休"}]},{"id":303,"word":"plausible","phonetic":"ˈplɔːzəbəl","segs":[{"pos":"adj.","def":"合理的；花言巧语的"}]},{"id":304,"word":"premium","phonetic":"ˈpriːmiəm","segs":[{"pos":"adj.","def":"优质的，高昂的"}]},{"id":305,"word":"milestone","phonetic":"ˈmaɪlstoʊn","segs":[{"pos":"n.","def":"里程碑；重要阶段"}]},{"id":306,"word":"fantasy","phonetic":"ˈfæntəsi","segs":[{"pos":"n.","def":"幻想"}]},{"id":307,"word":"adopt","phonetic":"əˈdɑːpt","segs":[{"pos":"v.","def":"收养，领养"}]},{"id":308,"word":"peak","phonetic":"piːk","segs":[{"pos":"n.","def":"顶峰，山峰"}]},{"id":309,"word":"bound","phonetic":"baʊnd","segs":[{"pos":"adj.","def":"一定会；受约束"}]},{"id":310,"word":"depress","phonetic":"dɪˈpres","segs":[{"pos":"v.","def":"使沮丧；使不景气"}]},{"id":311,"word":"upstairs","phonetic":"ˌʌpˈsterz","segs":[{"pos":"adv.","def":"在楼上"}]},{"id":312,"word":"epidemic","phonetic":"ˌepɪˈdemɪk","segs":[{"pos":"n.","def":"流行病，盛行"}]},{"id":313,"word":"participate","phonetic":"pɑːrˈtɪsɪpeɪt","segs":[{"pos":"v.","def":"参与"}]},{"id":314,"word":"witness","phonetic":"ˈwɪtnəs","segs":[{"pos":"v.","def":"见证；目击"},{"pos":"n.","def":"目击者"}]},{"id":315,"word":"striking","phonetic":"ˈstraɪkɪŋ","segs":[{"pos":"adj.","def":"显著的，引人注目的"}]},{"id":316,"word":"anticipate","phonetic":"ænˈtɪsɪpeɪt","segs":[{"pos":"v.","def":"预料，预见"}]},{"id":317,"word":"ferry","phonetic":"ˈferi","segs":[{"pos":"n.","def":"渡船"},{"pos":"v.","def":"运送，渡运"}]},{"id":318,"word":"random","phonetic":"ˈrændəm","segs":[{"pos":"adj.","def":"偶然的；随机的"}]},{"id":319,"word":"nutrition","phonetic":"nuˈtrɪʃən","segs":[{"pos":"n.","def":"营养"}]},{"id":320,"word":"extraordinary","phonetic":"ɪkˈstrɔːrdəneri","segs":[{"pos":"adj.","def":"不平常的"}]},{"id":321,"word":"accomplish","phonetic":"əˈkɑːmplɪʃ","segs":[{"pos":"v.","def":"完成，实现"}]},{"id":322,"word":"permanent","phonetic":"ˈpɜːrmənənt","segs":[{"pos":"adj.","def":"永久的，长久的"}]},{"id":323,"word":"minimum","phonetic":"ˈmɪnɪməm","segs":[{"pos":"n.","def":"最小值"},{"pos":"adj.","def":"最小的"}]},{"id":324,"word":"statute","phonetic":"ˈstætʃuːt","segs":[{"pos":"n.","def":"法令"}]},{"id":325,"word":"relationship","phonetic":"rɪˈleɪʃənʃɪp","segs":[{"pos":"n.","def":"关系"}]},{"id":326,"word":"fame","phonetic":"feɪm","segs":[{"pos":"n.","def":"名声；名气；名誉"}]},{"id":327,"word":"mental","phonetic":"ˈmentəl","segs":[{"pos":"adj.","def":"精神的"}]},{"id":328,"word":"orient","phonetic":"ˈɔːrient","segs":[{"pos":"v.","def":"确定方向，调整"}]},{"id":329,"word":"measure","phonetic":"ˈmeʒər","segs":[{"pos":"v.","def":"测量"},{"pos":"n.","def":"措施"}]},{"id":330,"word":"remarkable","phonetic":"rɪˈmɑːrkəbəl","segs":[{"pos":"adj.","def":"非凡的；显著的"}]},{"id":331,"word":"cope","phonetic":"koʊp","segs":[{"pos":"v.","def":"处理；应付"}]},{"id":332,"word":"investigate","phonetic":"ɪnˈvestɪɡeɪt","segs":[{"pos":"v.","def":"调查"}]},{"id":333,"word":"oppress","phonetic":"əˈpres","segs":[{"pos":"v.","def":"压迫"}]},{"id":334,"word":"counterpart","phonetic":"ˈkaʊntərpɑːrt","segs":[{"pos":"n.","def":"相对应的人或事"}]},{"id":335,"word":"original","phonetic":"əˈrɪdʒənəl","segs":[{"pos":"adj.","def":"最初的"}]},{"id":336,"word":"rescue","phonetic":"ˈreskjuː","segs":[{"pos":"v.","def":"救援；营救"}]},{"id":337,"word":"military","phonetic":"ˈmɪlɪteri","segs":[{"pos":"adj.","def":"军事的"}]},{"id":338,"word":"mammal","phonetic":"ˈmæməl","segs":[{"pos":"n.","def":"哺乳动物"}]},{"id":339,"word":"distill","phonetic":"dɪˈstɪl","segs":[{"pos":"v.","def":"蒸馏；提炼"}]},{"id":340,"word":"precede","phonetic":"prɪˈsiːd","segs":[{"pos":"v.","def":"领先，在...之前"}]},{"id":341,"word":"reverse","phonetic":"rɪˈvɜːrs","segs":[{"pos":"v.","def":"使反转，撤销"}]},{"id":342,"word":"insight","phonetic":"ˈɪnsaɪt","segs":[{"pos":"n.","def":"洞察力，深刻见解"}]},{"id":343,"word":"revenue","phonetic":"ˈrevənuː","segs":[{"pos":"n.","def":"收益，收入"}]},{"id":344,"word":"demonstrate","phonetic":"ˈdemənstreɪt","segs":[{"pos":"v.","def":"展示，证明"}]},{"id":345,"word":"broom","phonetic":"bruːm","segs":[{"pos":"n.","def":"扫把"}]},{"id":346,"word":"distinguish","phonetic":"dɪˈstɪŋɡwɪʃ","segs":[{"pos":"v.","def":"区分；辨别"}]},{"id":347,"word":"evolve","phonetic":"iˈvɑːlv","segs":[{"pos":"v.","def":"进化；逐渐发展"}]},{"id":348,"word":"fierce","phonetic":"fɪrs","segs":[{"pos":"adj.","def":"凶猛的，强烈的"}]},{"id":349,"word":"acute","phonetic":"əˈkjuːt","segs":[{"pos":"adj.","def":"严重的；敏锐的"}]},{"id":350,"word":"exploit","phonetic":"ɪkˈsplɔɪt","segs":[{"pos":"v.","def":"开发，利用，剥削"}]},{"id":351,"word":"contempt","phonetic":"kənˈtempt","segs":[{"pos":"n.","def":"轻视，蔑视"}]},{"id":352,"word":"production","phonetic":"prəˈdʌkʃən","segs":[{"pos":"n.","def":"生产"}]},{"id":353,"word":"delete","phonetic":"dɪˈliːt","segs":[{"pos":"v.","def":"删除"}]},{"id":354,"word":"introduce","phonetic":"ˌɪntrəˈdjuːs","segs":[{"pos":"v.","def":"介绍，引进"}]},{"id":355,"word":"disclose","phonetic":"dɪsˈkloʊz","segs":[{"pos":"v.","def":"泄露，揭露"}]},{"id":356,"word":"arithmetic","phonetic":"əˈrɪθmətɪk","segs":[{"pos":"n.","def":"算术；计算"}]},{"id":357,"word":"executive","phonetic":"ɪɡˈzekjətɪv","segs":[{"pos":"adj.","def":"执行的"},{"pos":"n.","def":"高管"}]},{"id":358,"word":"mass","phonetic":"mæs","segs":[{"pos":"n.","def":"堆"},{"pos":"adj.","def":"大规模的"}]},{"id":359,"word":"comprehend","phonetic":"ˌkɑːmprɪˈhend","segs":[{"pos":"v.","def":"理解"}]},{"id":360,"word":"impetus","phonetic":"ˈɪmpɪtəs","segs":[{"pos":"n.","def":"动力；推动"}]},{"id":361,"word":"accurate","phonetic":"ˈækjərət","segs":[{"pos":"adj.","def":"精确的，准确的"}]},{"id":362,"word":"betray","phonetic":"bɪˈtreɪ","segs":[{"pos":"v.","def":"背叛，泄露"}]},{"id":363,"word":"misunderstand","phonetic":"ˌmɪsʌndərˈstænd","segs":[{"pos":"v.","def":"误解"}]},{"id":364,"word":"costume","phonetic":"ˈkɑːstuːm","segs":[{"pos":"n.","def":"服装；戏服"}]},{"id":365,"word":"clarity","phonetic":"ˈklærəti","segs":[{"pos":"n.","def":"清晰"}]},{"id":366,"word":"vanish","phonetic":"ˈvænɪʃ","segs":[{"pos":"v.","def":"消失"}]},{"id":367,"word":"triumph","phonetic":"ˈtraɪəmf","segs":[{"pos":"n.","def":"成功，胜利"},{"pos":"v.","def":"战胜"}]},{"id":368,"word":"impress","phonetic":"ɪmˈpres","segs":[{"pos":"v.","def":"给...留下深刻印象"}]},{"id":369,"word":"snack","phonetic":"snæk","segs":[{"pos":"n.","def":"点心，小吃"}]},{"id":370,"word":"former","phonetic":"ˈfɔːrmər","segs":[{"pos":"adj.","def":"以前的"}]},{"id":371,"word":"oppose","phonetic":"əˈpoʊz","segs":[{"pos":"v.","def":"反对"}]},{"id":372,"word":"retrieve","phonetic":"rɪˈtriːv","segs":[{"pos":"v.","def":"取回，找回"}]},{"id":373,"word":"configuration","phonetic":"kənˌfɪɡjəˈreɪʃən","segs":[{"pos":"n.","def":"布局，结构"}]},{"id":374,"word":"recreation","phonetic":"ˌrekriˈeɪʃən","segs":[{"pos":"n.","def":"娱乐"}]},{"id":375,"word":"apparatus","phonetic":"ˌæpəˈrætəs","segs":[{"pos":"n.","def":"仪器"}]},{"id":376,"word":"refreshment","phonetic":"rɪˈfreʃmənt","segs":[{"pos":"n.","def":"茶点；食物和饮料"}]},{"id":377,"word":"rob","phonetic":"rɑːb","segs":[{"pos":"v.","def":"抢劫"}]},{"id":378,"word":"invest","phonetic":"ɪnˈvest","segs":[{"pos":"v.","def":"投资，投入"}]},{"id":379,"word":"block","phonetic":"blɑːk","segs":[{"pos":"n.","def":"阻碍，障碍；街区"},{"pos":"v.","def":"阻碍"}]},{"id":380,"word":"dictate","phonetic":"ˈdɪkteɪt","segs":[{"pos":"v.","def":"口述，支配，命令"}]},{"id":381,"word":"experience","phonetic":"ɪkˈspɪriəns","segs":[{"pos":"n./v.","def":"经验，经历"}]},{"id":382,"word":"propose","phonetic":"prəˈpoʊz","segs":[{"pos":"v.","def":"建议，提出"}]},{"id":383,"word":"parasite","phonetic":"ˈpærəsaɪt","segs":[{"pos":"n.","def":"寄生虫"}]},{"id":384,"word":"allocate","phonetic":"ˈæləkeɪt","segs":[{"pos":"v.","def":"分配"}]},{"id":385,"word":"formation","phonetic":"fɔːrˈmeɪʃən","segs":[{"pos":"n.","def":"形成"}]},{"id":386,"word":"rational","phonetic":"ˈræʃənəl","segs":[{"pos":"adj.","def":"合理的"}]},{"id":387,"word":"grasp","phonetic":"ɡræsp","segs":[{"pos":"v./n.","def":"抓紧；理解"}]},{"id":388,"word":"addicted","phonetic":"əˈdɪktɪd","segs":[{"pos":"adj.","def":"上瘾的；入迷的"}]},{"id":389,"word":"soothe","phonetic":"suːð","segs":[{"pos":"v.","def":"安抚；缓和"}]},{"id":390,"word":"sustain","phonetic":"səˈsteɪn","segs":[{"pos":"v.","def":"保持；支撑"}]},{"id":391,"word":"norm","phonetic":"nɔːrm","segs":[{"pos":"n.","def":"准则"}]},{"id":392,"word":"mortal","phonetic":"ˈmɔːrtəl","segs":[{"pos":"adj.","def":"致死的"},{"pos":"n.","def":"凡人"}]},{"id":393,"word":"reckless","phonetic":"ˈrekləs","segs":[{"pos":"adj.","def":"鲁莽的，不计后果的"}]},{"id":394,"word":"arrange","phonetic":"əˈreɪndʒ","segs":[{"pos":"v.","def":"排列；整理；筹备"}]},{"id":395,"word":"census","phonetic":"ˈsensəs","segs":[{"pos":"n.","def":"（官方的）统计；人口普查"}]},{"id":396,"word":"menace","phonetic":"ˈmenəs","segs":[{"pos":"n.","def":"威胁"}]},{"id":397,"word":"butter","phonetic":"ˈbʌtər","segs":[{"pos":"n.","def":"黄油"}]},{"id":398,"word":"accompany","phonetic":"əˈkʌmpəni","segs":[{"pos":"v.","def":"陪同，陪伴"}]},{"id":399,"word":"disrupt","phonetic":"dɪsˈrʌpt","segs":[{"pos":"v.","def":"使中断，扰乱"}]},{"id":400,"word":"margin","phonetic":"ˈmɑːrdʒɪn","segs":[{"pos":"n.","def":"边缘，页面空白；差额"}]},{"id":401,"word":"humid","phonetic":"ˈhjuːmɪd","segs":[{"pos":"adj.","def":"温暖潮湿的"}]},{"id":402,"word":"develop","phonetic":"dɪˈveləp","segs":[{"pos":"v.","def":"发展，患(病)"}]},{"id":403,"word":"despite","phonetic":"dɪˈspaɪt","segs":[{"pos":"prep.","def":"尽管"}]},{"id":404,"word":"up-to-date","phonetic":"ˌʌp tə ˈdeɪt","segs":[{"pos":"adj.","def":"最新的，最近的"}]},{"id":405,"word":"emergency","phonetic":"iˈmɜːrdʒənsi","segs":[{"pos":"n.","def":"紧急情况"}]},{"id":406,"word":"rank","phonetic":"ræŋk","segs":[{"pos":"n.","def":"级别"},{"pos":"v.","def":"把...分等级"}]},{"id":407,"word":"lawsuit","phonetic":"ˈlɔːsuːt","segs":[{"pos":"n.","def":"诉讼"}]},{"id":408,"word":"slim","phonetic":"slɪm","segs":[{"pos":"adj.","def":"苗条的"}]},{"id":409,"word":"drought","phonetic":"draʊt","segs":[{"pos":"n.","def":"干旱；旱灾"}]},{"id":410,"word":"accuse","phonetic":"əˈkjuːz","segs":[{"pos":"v.","def":"指责，控告"}]},{"id":411,"word":"aspire","phonetic":"əˈspaɪər","segs":[{"pos":"v.","def":"渴望，有志于"}]},{"id":412,"word":"absent","phonetic":"ˈæbsənt","segs":[{"pos":"adj.","def":"缺席的，心不在焉的"}]},{"id":413,"word":"keen","phonetic":"kiːn","segs":[{"pos":"adj.","def":"热衷的，着迷的"}]},{"id":414,"word":"dilemma","phonetic":"dɪˈlemə","segs":[{"pos":"n.","def":"困境"}]},{"id":415,"word":"ambulance","phonetic":"ˈæmbjələns","segs":[{"pos":"n.","def":"救护车"}]},{"id":416,"word":"slack","phonetic":"slæk","segs":[{"pos":"adj.","def":"松弛的；萧条的"}]},{"id":417,"word":"graph","phonetic":"ɡræf","segs":[{"pos":"n.","def":"图表，曲线图"}]},{"id":418,"word":"volume","phonetic":"ˈvɑːljuːm","segs":[{"pos":"n.","def":"体积；（书的）卷；音量"}]},{"id":419,"word":"vast","phonetic":"væst","segs":[{"pos":"adj.","def":"庞大的；大量的"}]},{"id":420,"word":"dull","phonetic":"dʌl","segs":[{"pos":"adj.","def":"无聊的，迟钝的"}]},{"id":421,"word":"blend","phonetic":"blend","segs":[{"pos":"v.","def":"使混合；融合"}]},{"id":422,"word":"breed","phonetic":"briːd","segs":[{"pos":"v.","def":"饲养；繁殖；产生"},{"pos":"n.","def":"品种"}]},{"id":423,"word":"local","phonetic":"ˈloʊkəl","segs":[{"pos":"adj.","def":"本地的，地方的"}]},{"id":424,"word":"lean","phonetic":"liːn","segs":[{"pos":"v.","def":"倚靠"},{"pos":"adj.","def":"瘦的"}]},{"id":425,"word":"mislead","phonetic":"ˌmɪsˈliːd","segs":[{"pos":"v.","def":"误导"}]},{"id":426,"word":"decline","phonetic":"dɪˈklaɪn","segs":[{"pos":"v./n.","def":"下降，谢绝"}]},{"id":427,"word":"obey","phonetic":"əˈbeɪ","segs":[{"pos":"v.","def":"服从，遵从"}]},{"id":428,"word":"route","phonetic":"ruːt","segs":[{"pos":"n.","def":"固定路线"}]},{"id":429,"word":"count","phonetic":"kaʊnt","segs":[{"pos":"v.","def":"数数"},{"pos":"n.","def":"总数"}]},{"id":430,"word":"optimism","phonetic":"ˈɑːptɪmɪzəm","segs":[{"pos":"n.","def":"乐观主义"}]},{"id":431,"word":"peculiar","phonetic":"pɪˈkjuːliər","segs":[{"pos":"adj.","def":"怪异的；特殊的"}]},{"id":432,"word":"silver","phonetic":"ˈsɪlvər","segs":[{"pos":"n.","def":"银色"},{"pos":"adj.","def":"银色的"}]},{"id":433,"word":"motivate","phonetic":"ˈmoʊtɪveɪt","segs":[{"pos":"v.","def":"驱使，激励"}]},{"id":434,"word":"ultimate","phonetic":"ˈʌltɪmət","segs":[{"pos":"adj.","def":"最后的，至高的"}]},{"id":435,"word":"adequate","phonetic":"ˈædɪkwət","segs":[{"pos":"adj.","def":"足够的，合格的"}]},{"id":436,"word":"observe","phonetic":"əbˈzɜːrv","segs":[{"pos":"v.","def":"注意到，观察，遵守"}]},{"id":437,"word":"previous","phonetic":"ˈpriːviəs","segs":[{"pos":"adj.","def":"先前的，以往的"}]},{"id":438,"word":"derive","phonetic":"dɪˈraɪv","segs":[{"pos":"v.","def":"源自；衍生"}]},{"id":439,"word":"specify","phonetic":"ˈspesɪfaɪ","segs":[{"pos":"v.","def":"详述；指定"}]},{"id":440,"word":"thrive","phonetic":"θraɪv","segs":[{"pos":"v.","def":"繁荣，茁壮成长"}]},{"id":441,"word":"raise","phonetic":"reɪz","segs":[{"pos":"v.","def":"举起，提升，筹款，抚养"}]},{"id":442,"word":"abandon","phonetic":"əˈbændən","segs":[{"pos":"v.","def":"放弃，抛弃"}]},{"id":443,"word":"expense","phonetic":"ɪkˈspens","segs":[{"pos":"n.","def":"费用"}]},{"id":444,"word":"enlighten","phonetic":"ɪnˈlaɪtən","segs":[{"pos":"v.","def":"启发，开导"}]},{"id":445,"word":"eliminate","phonetic":"ɪˈlɪmɪneɪt","segs":[{"pos":"v.","def":"消除，淘汰"}]},{"id":446,"word":"segregate","phonetic":"ˈseɡrɪɡeɪt","segs":[{"pos":"v.","def":"使隔离，使分开"}]},{"id":447,"word":"conspicuous","phonetic":"kənˈspɪkjuəs","segs":[{"pos":"adj.","def":"显著的"}]},{"id":448,"word":"catastrophe","phonetic":"kəˈtæstrəfi","segs":[{"pos":"n.","def":"灾难，困难"}]},{"id":449,"word":"critical","phonetic":"ˈkrɪtɪkəl","segs":[{"pos":"adj.","def":"批评的，关键的"}]},{"id":450,"word":"contact","phonetic":"ˈkɑːntækt","segs":[{"pos":"v.","def":"接触，联系"}]},{"id":451,"word":"integrate","phonetic":"ˈɪntɪɡreɪt","segs":[{"pos":"v.","def":"整合"}]},{"id":452,"word":"therapy","phonetic":"ˈθerəpi","segs":[{"pos":"n.","def":"治疗；疗法"}]},{"id":453,"word":"entire","phonetic":"ɪnˈtaɪər","segs":[{"pos":"adj.","def":"全部的"}]},{"id":454,"word":"organize","phonetic":"ˈɔːrɡənaɪz","segs":[{"pos":"v.","def":"组织"}]},{"id":455,"word":"mortgage","phonetic":"ˈmɔːrɡɪdʒ","segs":[{"pos":"n.","def":"抵押"}]},{"id":456,"word":"initiative","phonetic":"ɪˈnɪʃətɪv","segs":[{"pos":"n.","def":"主动性，倡议"}]},{"id":457,"word":"custom","phonetic":"ˈkʌstəm","segs":[{"pos":"n.","def":"习俗，传统"}]},{"id":458,"word":"wood","phonetic":"wʊd","segs":[{"pos":"n.","def":"木头"}]},{"id":459,"word":"invent","phonetic":"ɪnˈvent","segs":[{"pos":"v.","def":"发明，创造"}]},{"id":460,"word":"destroy","phonetic":"dɪˈstrɔɪ","segs":[{"pos":"v.","def":"毁灭，破坏"}]},{"id":461,"word":"tropical","phonetic":"ˈtrɑːpɪkəl","segs":[{"pos":"adj.","def":"热带的"}]},{"id":462,"word":"respond","phonetic":"rɪˈspɑːnd","segs":[{"pos":"v.","def":"回复，作出反应"}]},{"id":463,"word":"ignite","phonetic":"ɪɡˈnaɪt","segs":[{"pos":"v.","def":"点燃，激起"}]},{"id":464,"word":"alive","phonetic":"əˈlaɪv","segs":[{"pos":"adj.","def":"活着的"}]},{"id":465,"word":"network","phonetic":"ˈnetwɜːrk","segs":[{"pos":"n.","def":"网络"}]},{"id":466,"word":"embrace","phonetic":"ɪmˈbreɪs","segs":[{"pos":"v.","def":"拥抱，欣然接受"}]},{"id":467,"word":"considerate","phonetic":"kənˈsɪdərət","segs":[{"pos":"adj.","def":"考虑周到的"}]},{"id":468,"word":"terminate","phonetic":"ˈtɜːrmɪneɪt","segs":[{"pos":"v.","def":"使结束"}]},{"id":469,"word":"penalty","phonetic":"ˈpenəlti","segs":[{"pos":"n.","def":"处罚；惩罚"}]},{"id":470,"word":"subsequent","phonetic":"ˈsʌbsɪkwənt","segs":[{"pos":"adj.","def":"随后的"}]},{"id":471,"word":"fatigue","phonetic":"fəˈtiːɡ","segs":[{"pos":"n.","def":"疲劳，劳累"}]},{"id":472,"word":"modern","phonetic":"ˈmɑːdərn","segs":[{"pos":"adj.","def":"现代的"}]},{"id":473,"word":"wither","phonetic":"ˈwɪðər","segs":[{"pos":"v.","def":"枯萎"}]},{"id":474,"word":"bolster","phonetic":"ˈboʊlstər","segs":[{"pos":"v.","def":"增强；加强"}]},{"id":475,"word":"crucial","phonetic":"ˈkruːʃəl","segs":[{"pos":"adj.","def":"关键性的，至关重要的"}]},{"id":476,"word":"typical","phonetic":"ˈtɪpɪkəl","segs":[{"pos":"adj.","def":"典型的"}]},{"id":477,"word":"neat","phonetic":"niːt","segs":[{"pos":"adj.","def":"整洁的；整齐的"}]},{"id":478,"word":"status","phonetic":"ˈsteɪtəs","segs":[{"pos":"n.","def":"地位，状况"}]},{"id":479,"word":"deliver","phonetic":"dɪˈlɪvər","segs":[{"pos":"v.","def":"传送，发表（讲话）"}]},{"id":480,"word":"complement","phonetic":"ˈkɑːmplɪment","segs":[{"pos":"v.","def":"补充"}]},{"id":481,"word":"inherent","phonetic":"ɪnˈhɪrənt","segs":[{"pos":"adj.","def":"固有的；内在的"}]},{"id":482,"word":"ascend","phonetic":"əˈsend","segs":[{"pos":"v.","def":"上升"}]},{"id":483,"word":"grain","phonetic":"ɡreɪn","segs":[{"pos":"n.","def":"谷物；粮食"}]},{"id":484,"word":"voyage","phonetic":"ˈvɔɪɪdʒ","segs":[{"pos":"n.","def":"旅行，航程"}]},{"id":485,"word":"celebrate","phonetic":"ˈselɪbreɪt","segs":[{"pos":"v.","def":"庆祝"}]},{"id":486,"word":"fundamental","phonetic":"ˌfʌndəˈmentəl","segs":[{"pos":"adj.","def":"基础的"}]},{"id":487,"word":"similar","phonetic":"ˈsɪmɪlər","segs":[{"pos":"adj.","def":"类似的，相像的"}]},{"id":488,"word":"forecast","phonetic":"ˈfɔːrkæst","segs":[{"pos":"v.","def":"预测"}]},{"id":489,"word":"available","phonetic":"əˈveɪləbəl","segs":[{"pos":"adj.","def":"可获得的，有空的"}]},{"id":490,"word":"merchant","phonetic":"ˈmɜːrtʃənt","segs":[{"pos":"n.","def":"商人"}]},{"id":491,"word":"bless","phonetic":"bles","segs":[{"pos":"v.","def":"祝福"}]},{"id":492,"word":"infrastructure","phonetic":"ˈɪnfrəstrʌktʃər","segs":[{"pos":"n.","def":"基础设施"}]},{"id":493,"word":"generous","phonetic":"ˈdʒenərəs","segs":[{"pos":"adj.","def":"慷慨的，大方的"}]},{"id":494,"word":"vegetation","phonetic":"ˌvedʒɪˈteɪʃən","segs":[{"pos":"n.","def":"植物；草木"}]},{"id":495,"word":"senate","phonetic":"ˈsenət","segs":[{"pos":"n.","def":"参议院"}]},{"id":496,"word":"external","phonetic":"ɪkˈstɜːrnəl","segs":[{"pos":"adj.","def":"外部的，外来的"}]},{"id":497,"word":"etiquette","phonetic":"ˈetɪket","segs":[{"pos":"n.","def":"礼仪；礼节"}]},{"id":498,"word":"faculty","phonetic":"ˈfækəlti","segs":[{"pos":"n.","def":"能力；全体教师"}]},{"id":499,"word":"revise","phonetic":"rɪˈvaɪz","segs":[{"pos":"v.","def":"复习；修改"}]},{"id":500,"word":"seminar","phonetic":"ˈsemɪnɑːr","segs":[{"pos":"n.","def":"研讨会"}]},{"id":501,"word":"headquarters","phonetic":"ˌhedˈkwɔːrtərz","segs":[{"pos":"n.","def":"(pl.) 总部"}]},{"id":502,"word":"border","phonetic":"ˈbɔːrdər","segs":[{"pos":"n.","def":"边界"},{"pos":"v.","def":"与...毗邻"}]},{"id":503,"word":"symphony","phonetic":"ˈsɪmfəni","segs":[{"pos":"n.","def":"交响乐"}]},{"id":504,"word":"escalate","phonetic":"ˈeskəleɪt","segs":[{"pos":"v.","def":"加剧；不断升级"}]},{"id":505,"word":"desolate","phonetic":"ˈdesələt","segs":[{"pos":"adj.","def":"荒凉的；孤独的"}]},{"id":506,"word":"indigenous","phonetic":"ɪnˈdɪdʒənəs","segs":[{"pos":"adj.","def":"土生土长的"}]},{"id":507,"word":"dilute","phonetic":"daɪˈluːt","segs":[{"pos":"v.","def":"稀释；冲淡"}]},{"id":508,"word":"pilot","phonetic":"ˈpaɪlət","segs":[{"pos":"n.","def":"飞行员"},{"pos":"adj.","def":"试点的"}]},{"id":509,"word":"exceed","phonetic":"ɪkˈsiːd","segs":[{"pos":"v.","def":"超过"}]},{"id":510,"word":"overlook","phonetic":"ˌoʊvərˈlʊk","segs":[{"pos":"v.","def":"俯瞰；忽视"}]},{"id":511,"word":"enable","phonetic":"ɪˈneɪbəl","segs":[{"pos":"v.","def":"使能够"}]},{"id":512,"word":"sheep","phonetic":"ʃiːp","segs":[{"pos":"n.","def":"绵羊"}]},{"id":513,"word":"adapt","phonetic":"əˈdæpt","segs":[{"pos":"v.","def":"适应"}]},{"id":514,"word":"straightforward","phonetic":"ˌstreɪtˈfɔːrwərd","segs":[{"pos":"adj.","def":"简单的"}]},{"id":515,"word":"insist","phonetic":"ɪnˈsɪst","segs":[{"pos":"v.","def":"坚持，坚决要求"}]},{"id":516,"word":"expire","phonetic":"ɪkˈspaɪər","segs":[{"pos":"v.","def":"到期，期满"}]},{"id":517,"word":"impair","phonetic":"ɪmˈper","segs":[{"pos":"v.","def":"损害；削弱"}]},{"id":518,"word":"appetite","phonetic":"ˈæpɪtaɪt","segs":[{"pos":"n.","def":"食欲；欲望"}]},{"id":519,"word":"tedious","phonetic":"ˈtiːdiəs","segs":[{"pos":"adj.","def":"冗长的；单调乏味的"}]},{"id":520,"word":"prejudice","phonetic":"ˈpredʒədɪs","segs":[{"pos":"n.","def":"偏见；歧视"}]},{"id":521,"word":"bend","phonetic":"bend","segs":[{"pos":"v.","def":"弯曲"},{"pos":"n.","def":"拐弯"}]},{"id":522,"word":"antagonism","phonetic":"ænˈtæɡənɪzəm","segs":[{"pos":"n.","def":"对抗情绪"}]},{"id":523,"word":"comprehensive","phonetic":"ˌkɑːmprɪˈhensɪv","segs":[{"pos":"adj.","def":"全面的"}]},{"id":524,"word":"intelligent","phonetic":"ɪnˈtelɪdʒənt","segs":[{"pos":"adj.","def":"聪明的"}]},{"id":525,"word":"ordinary","phonetic":"ˈɔːrdəneri","segs":[{"pos":"adj.","def":"普通的"}]},{"id":526,"word":"population","phonetic":"ˌpɑːpjəˈleɪʃən","segs":[{"pos":"n.","def":"人口"}]},{"id":527,"word":"patient","phonetic":"ˈpeɪʃənt","segs":[{"pos":"adj.","def":"有耐心的"},{"pos":"n.","def":"病人"}]},{"id":528,"word":"assess","phonetic":"əˈses","segs":[{"pos":"v.","def":"评估，评定"}]},{"id":529,"word":"hierarchy","phonetic":"ˈhaɪərɑːrki","segs":[{"pos":"n.","def":"等级制度"}]},{"id":530,"word":"pill","phonetic":"pɪl","segs":[{"pos":"n.","def":"药片"}]},{"id":531,"word":"consistent","phonetic":"kənˈsɪstənt","segs":[{"pos":"adj.","def":"一致的"}]},{"id":532,"word":"extraordinary","phonetic":"ɪkˈstrɔːrdəneri","segs":[{"pos":"adj.","def":"非凡的"}]},{"id":533,"word":"settle","phonetic":"ˈsetəl","segs":[{"pos":"v.","def":"解决；定居"}]},{"id":534,"word":"envisage","phonetic":"ɪnˈvɪzɪdʒ","segs":[{"pos":"v.","def":"展望，设想"}]},{"id":535,"word":"satellite","phonetic":"ˈsætəlaɪt","segs":[{"pos":"n.","def":"卫星；人造卫星"}]},{"id":536,"word":"symptom","phonetic":"ˈsɪmptəm","segs":[{"pos":"n.","def":"症状；征兆"}]},{"id":537,"word":"sensitive","phonetic":"ˈsensətɪv","segs":[{"pos":"adj.","def":"敏感的，体贴的"}]},{"id":538,"word":"occasion","phonetic":"əˈkeɪʒən","segs":[{"pos":"n.","def":"场合"}]},{"id":539,"word":"deter","phonetic":"dɪˈtɜːr","segs":[{"pos":"v.","def":"阻止；威慑"}]},{"id":540,"word":"sinister","phonetic":"ˈsɪnɪstər","segs":[{"pos":"adj.","def":"邪恶的；阴险的"}]},{"id":541,"word":"global","phonetic":"ˈgloʊbəl","segs":[{"pos":"adj.","def":"全球的"}]},{"id":542,"word":"compress","phonetic":"kəmˈpres","segs":[{"pos":"v.","def":"压缩；精简"}]},{"id":543,"word":"toll","phonetic":"toʊl","segs":[{"pos":"n.","def":"伤亡人数，通行费"}]},{"id":544,"word":"rhythm","phonetic":"ˈrɪðəm","segs":[{"pos":"n.","def":"节奏"}]},{"id":545,"word":"merge","phonetic":"mɜːrdʒ","segs":[{"pos":"v.","def":"合并；相容"}]},{"id":546,"word":"enormous","phonetic":"ɪˈnɔːrməs","segs":[{"pos":"adj.","def":"巨大的"}]},{"id":547,"word":"spontaneous","phonetic":"spɑːnˈteɪniəs","segs":[{"pos":"adj.","def":"自发的"}]},{"id":548,"word":"aftermath","phonetic":"ˈæftərmæθ","segs":[{"pos":"n.","def":"后果；创伤"}]},{"id":549,"word":"exclude","phonetic":"ɪkˈskluːd","segs":[{"pos":"v.","def":"把...排除在外；拒绝"}]},{"id":550,"word":"retreat","phonetic":"rɪˈtriːt","segs":[{"pos":"v.","def":"撤退；后退"},{"pos":"n.","def":"隐居处"}]},{"id":551,"word":"potential","phonetic":"pəˈtenʃəl","segs":[{"pos":"adj.","def":"潜在的，可能的"},{"pos":"n.","def":"潜力"}]},{"id":552,"word":"commerce","phonetic":"ˈkɑːmɜːrs","segs":[{"pos":"n.","def":"商业；贸易"}]},{"id":553,"word":"manual","phonetic":"ˈmænjuəl","segs":[{"pos":"adj.","def":"手工的；体力的"}]},{"id":554,"word":"deviate","phonetic":"ˈdiːvieɪt","segs":[{"pos":"v.","def":"偏离；背离"}]},{"id":555,"word":"assert","phonetic":"əˈsɜːrt","segs":[{"pos":"v.","def":"坚称"}]},{"id":556,"word":"handbook","phonetic":"ˈhændbʊk","segs":[{"pos":"n.","def":"手册，指南"}]},{"id":557,"word":"legal","phonetic":"ˈliːɡəl","segs":[{"pos":"adj.","def":"法律的，合法的"}]},{"id":558,"word":"occur","phonetic":"əˈkɜːr","segs":[{"pos":"v.","def":"发生"}]},{"id":559,"word":"illiterate","phonetic":"ɪˈlɪtərət","segs":[{"pos":"adj.","def":"文盲的，不识字的"}]},{"id":560,"word":"input","phonetic":"ˈɪnpʊt","segs":[{"pos":"v.","def":"输入（信息），投入（时间）"}]},{"id":561,"word":"awake","phonetic":"əˈweɪk","segs":[{"pos":"adj.","def":"醒着的"},{"pos":"v.","def":"唤醒"}]},{"id":562,"word":"negative","phonetic":"ˈneɡətɪv","segs":[{"pos":"adj.","def":"消极的，负面的"}]},{"id":563,"word":"considerable","phonetic":"kənˈsɪdərəbəl","segs":[{"pos":"adj.","def":"相当大的"}]},{"id":564,"word":"vehicle","phonetic":"ˈviːɪkəl","segs":[{"pos":"n.","def":"车辆，工具"}]},{"id":565,"word":"sequence","phonetic":"ˈsiːkwəns","segs":[{"pos":"n.","def":"序列"}]},{"id":566,"word":"amend","phonetic":"əˈmend","segs":[{"pos":"v.","def":"修改，修订"}]},{"id":567,"word":"wise","phonetic":"waɪz","segs":[{"pos":"adj.","def":"聪明的，明智的"}]},{"id":568,"word":"ample","phonetic":"ˈæmpəl","segs":[{"pos":"adj.","def":"足够的"}]},{"id":569,"word":"initiate","phonetic":"ɪˈnɪʃieɪt","segs":[{"pos":"v.","def":"发起"}]},{"id":570,"word":"ascertain","phonetic":"ˌæsərˈteɪn","segs":[{"pos":"v.","def":"查明；弄清"}]},{"id":571,"word":"indulge","phonetic":"ɪnˈdʌldʒ","segs":[{"pos":"v.","def":"沉迷；纵容"}]},{"id":572,"word":"allow","phonetic":"əˈlaʊ","segs":[{"pos":"v.","def":"允许"}]},{"id":573,"word":"intervention","phonetic":"ˌɪntərˈvenʃən","segs":[{"pos":"n.","def":"干预"}]},{"id":574,"word":"obstacle","phonetic":"ˈɑːbstəkəl","segs":[{"pos":"n.","def":"障碍，阻碍物"}]},{"id":575,"word":"multiple","phonetic":"ˈmʌltɪpl","segs":[{"pos":"adj.","def":"多种多样的"}]},{"id":576,"word":"surge","phonetic":"sɜːrdʒ","segs":[{"pos":"n.","def":"激增，上升"}]},{"id":577,"word":"cigarette","phonetic":"ˌsɪɡəˈret","segs":[{"pos":"n.","def":"香烟"}]},{"id":578,"word":"emphasis","phonetic":"ˈemfəsɪs","segs":[{"pos":"n.","def":"强调"}]},{"id":579,"word":"coincide","phonetic":"ˌkoʊɪnˈsaɪd","segs":[{"pos":"v.","def":"同时发生"}]},{"id":580,"word":"calendar","phonetic":"ˈkælɪndər","segs":[{"pos":"n.","def":"日历，历法"}]},{"id":581,"word":"divide","phonetic":"dɪˈvaɪd","segs":[{"pos":"v.","def":"分开，分散"}]},{"id":582,"word":"segment","phonetic":"ˈseɡmənt","segs":[{"pos":"n.","def":"部分"},{"pos":"v.","def":"划分"}]},{"id":583,"word":"discriminate","phonetic":"dɪˈskrɪmɪneɪt","segs":[{"pos":"v.","def":"歧视；区分"}]},{"id":584,"word":"undo","phonetic":"ʌnˈduː","segs":[{"pos":"v.","def":"解开，消除"}]},{"id":585,"word":"suppose","phonetic":"səˈpoʊz","segs":[{"pos":"v.","def":"假定，假设"}]},{"id":586,"word":"admire","phonetic":"ədˈmaɪər","segs":[{"pos":"v.","def":"仰慕，赞赏"}]},{"id":587,"word":"eternal","phonetic":"ɪˈtɜːrnəl","segs":[{"pos":"adj.","def":"永恒的，永久的"}]},{"id":588,"word":"influence","phonetic":"ˈɪnfluəns","segs":[{"pos":"n./v.","def":"影响"}]},{"id":589,"word":"humble","phonetic":"ˈhʌmbəl","segs":[{"pos":"adj.","def":"谦逊的，卑微的"}]},{"id":590,"word":"aggregate","phonetic":"ˈæɡrɪɡeɪt","segs":[{"pos":"v.","def":"合计，汇集"}]},{"id":591,"word":"depend","phonetic":"dɪˈpend","segs":[{"pos":"v.","def":"依赖"}]},{"id":592,"word":"intermediate","phonetic":"ˌɪntərˈmiːdiət","segs":[{"pos":"adj.","def":"中间的"}]},{"id":593,"word":"erode","phonetic":"ɪˈroʊd","segs":[{"pos":"v.","def":"侵蚀；逐渐毁坏"}]},{"id":594,"word":"slip","phonetic":"slɪp","segs":[{"pos":"v.","def":"滑"},{"pos":"n.","def":"差错"}]},{"id":595,"word":"fluctuate","phonetic":"ˈflʌktʃueɪt","segs":[{"pos":"v.","def":"波动"}]},{"id":596,"word":"disapprove","phonetic":"ˌdɪsəˈpruːv","segs":[{"pos":"v.","def":"不赞成，反对"}]},{"id":597,"word":"attempt","phonetic":"əˈtempt","segs":[{"pos":"v.","def":"努力，试图"}]},{"id":598,"word":"sanitation","phonetic":"ˌsænɪˈteɪʃən","segs":[{"pos":"n.","def":"公共卫生"}]},{"id":599,"word":"major","phonetic":"ˈmeɪdʒər","segs":[{"pos":"adj.","def":"主要的"},{"pos":"n.","def":"专业"}]},{"id":600,"word":"likewise","phonetic":"ˈlaɪkwaɪz","segs":[{"pos":"adv.","def":"同样地"}]},{"id":601,"word":"contract","phonetic":"ˈkɑːntrækt","segs":[{"pos":"v.","def":"缩小；收缩"},{"pos":"n.","def":"合同"}]},{"id":602,"word":"obscure","phonetic":"əbˈskjʊr","segs":[{"pos":"adj.","def":"无名的，费解的"}]},{"id":603,"word":"postpone","phonetic":"poʊstˈpoʊn","segs":[{"pos":"v.","def":"推迟，延期"}]},{"id":604,"word":"testimony","phonetic":"ˈtestɪmoʊni","segs":[{"pos":"n.","def":"证明，证词"}]},{"id":605,"word":"ponder","phonetic":"ˈpɑːndər","segs":[{"pos":"v.","def":"仔细思考"}]},{"id":606,"word":"metropolitan","phonetic":"ˌmetrəˈpɑːlɪtən","segs":[{"pos":"adj.","def":"大城市的"}]},{"id":607,"word":"factor","phonetic":"ˈfæktər","segs":[{"pos":"n.","def":"因素"}]},{"id":608,"word":"pedestrian","phonetic":"pəˈdestriən","segs":[{"pos":"n.","def":"行人"}]},{"id":609,"word":"recommend","phonetic":"ˌrekəˈmend","segs":[{"pos":"v.","def":"推荐，介绍"}]},{"id":610,"word":"companion","phonetic":"kəmˈpænjən","segs":[{"pos":"n.","def":"同伴；伴侣"}]},{"id":611,"word":"prompt","phonetic":"prɑːmpt","segs":[{"pos":"v.","def":"促使"},{"pos":"adj.","def":"立即的，及时的"}]},{"id":612,"word":"hate","phonetic":"heɪt","segs":[{"pos":"v.","def":"讨厌"}]},{"id":613,"word":"liberal","phonetic":"ˈlɪbərəl","segs":[{"pos":"adj.","def":"自由的；开朗的"}]},{"id":614,"word":"restless","phonetic":"ˈrestləs","segs":[{"pos":"adj.","def":"坐立不安的；不安分的"}]},{"id":615,"word":"controversy","phonetic":"ˈkɑːntrəvɜːrsi","segs":[{"pos":"n.","def":"争议"}]},{"id":616,"word":"worship","phonetic":"ˈwɜːrʃɪp","segs":[{"pos":"n./v.","def":"崇拜"}]},{"id":617,"word":"active","phonetic":"ˈæktɪv","segs":[{"pos":"adj.","def":"积极的"}]},{"id":618,"word":"research","phonetic":"rɪˈsɜːrtʃ","segs":[{"pos":"n./v.","def":"研究"}]},{"id":619,"word":"disaster","phonetic":"dɪˈzæstər","segs":[{"pos":"n.","def":"灾难"}]},{"id":620,"word":"rocket","phonetic":"ˈrɑːkɪt","segs":[{"pos":"n.","def":"火箭"},{"pos":"v.","def":"快速增长"}]},{"id":621,"word":"option","phonetic":"ˈɑːpʃən","segs":[{"pos":"n.","def":"选择"}]},{"id":622,"word":"bulk","phonetic":"bʌlk","segs":[{"pos":"n.","def":"大部分；体积，大量"}]},{"id":623,"word":"launch","phonetic":"lɔːntʃ","segs":[{"pos":"v.","def":"上市，发行，发射"}]},{"id":624,"word":"label","phonetic":"ˈleɪbəl","segs":[{"pos":"n.","def":"标签"},{"pos":"v.","def":"贴标签于"}]},{"id":625,"word":"suicide","phonetic":"ˈsuːɪsaɪd","segs":[{"pos":"n.","def":"自杀"}]},{"id":626,"word":"provided","phonetic":"prəˈvaɪdɪd","segs":[{"pos":"conj.","def":"如果，假如"}]},{"id":627,"word":"process","phonetic":"ˈprɑːses","segs":[{"pos":"n.","def":"过程"},{"pos":"v.","def":"处理"}]},{"id":628,"word":"commodity","phonetic":"kəˈmɑːdəti","segs":[{"pos":"n.","def":"商品"}]},{"id":629,"word":"reject","phonetic":"rɪˈdʒekt","segs":[{"pos":"v.","def":"拒绝"}]},{"id":630,"word":"evaluate","phonetic":"ɪˈvæljueɪt","segs":[{"pos":"v.","def":"评估"}]},{"id":631,"word":"favour","phonetic":"ˈfeɪvər","segs":[{"pos":"n.","def":"偏爱，帮助"}]},{"id":632,"word":"property","phonetic":"ˈprɑːpərti","segs":[{"pos":"n.","def":"财产，特性"}]},{"id":633,"word":"oxygen","phonetic":"ˈɑːksɪdʒən","segs":[{"pos":"n.","def":"氧气"}]},{"id":634,"word":"attorney","phonetic":"əˈtɜːrni","segs":[{"pos":"n.","def":"律师，代理人"}]},{"id":635,"word":"heritage","phonetic":"ˈherɪtɪdʒ","segs":[{"pos":"n.","def":"遗产"}]},{"id":636,"word":"paradox","phonetic":"ˈpærədɑːks","segs":[{"pos":"n.","def":"矛盾；悖论"}]},{"id":637,"word":"philosophy","phonetic":"fɪˈlɑːsəfi","segs":[{"pos":"n.","def":"哲学"}]},{"id":638,"word":"stagger","phonetic":"ˈstæɡər","segs":[{"pos":"v.","def":"蹒跚；使震惊"}]},{"id":639,"word":"pyramid","phonetic":"ˈpɪrəmɪd","segs":[{"pos":"n.","def":"金字塔"}]},{"id":640,"word":"obtain","phonetic":"əbˈteɪn","segs":[{"pos":"v.","def":"获得"}]},{"id":641,"word":"glamour","phonetic":"ˈɡlæmər","segs":[{"pos":"n.","def":"魅力；吸引力"}]},{"id":642,"word":"stagnate","phonetic":"ˈstæɡneɪt","segs":[{"pos":"v.","def":"停滞；不发展"}]},{"id":643,"word":"declare","phonetic":"dɪˈkler","segs":[{"pos":"v.","def":"宣布"}]},{"id":644,"word":"intellectual","phonetic":"ˌɪntəˈlektʃuəl","segs":[{"pos":"adj.","def":"智力的"}]},{"id":645,"word":"rival","phonetic":"ˈraɪvəl","segs":[{"pos":"n.","def":"竞争对手"},{"pos":"v.","def":"与...相匹配"}]},{"id":646,"word":"precise","phonetic":"prɪˈsaɪs","segs":[{"pos":"adj.","def":"精确的；明确的"}]},{"id":647,"word":"possess","phonetic":"pəˈzes","segs":[{"pos":"v.","def":"拥有"}]},{"id":648,"word":"intrude","phonetic":"ɪnˈtruːd","segs":[{"pos":"v.","def":"侵入，闯入"}]},{"id":649,"word":"coherent","phonetic":"koʊˈhɪrənt","segs":[{"pos":"adj.","def":"连贯的；一致的"}]},{"id":650,"word":"levy","phonetic":"ˈlevi","segs":[{"pos":"n./v.","def":"征税"}]},{"id":651,"word":"intake","phonetic":"ˈɪnteɪk","segs":[{"pos":"n.","def":"摄入量"}]},{"id":652,"word":"community","phonetic":"kəˈmjuːnəti","segs":[{"pos":"n.","def":"社区；团体"}]},{"id":653,"word":"inferior","phonetic":"ɪnˈfɪriər","segs":[{"pos":"adj.","def":"较差的，较低的"}]},{"id":654,"word":"battery","phonetic":"ˈbætəri","segs":[{"pos":"n.","def":"电池；一系列"}]},{"id":655,"word":"convert","phonetic":"ˈkoʊvɜːrt","segs":[{"pos":"v.","def":"转换，转变"}]},{"id":656,"word":"mushroom","phonetic":"ˈmʌʃruːm","segs":[{"pos":"n.","def":"蘑菇"}]},{"id":657,"word":"lenient","phonetic":"ˈliːniənt","segs":[{"pos":"adj.","def":"宽大的；宽容的"}]},{"id":658,"word":"garage","phonetic":"ɡəˈrɑːʒ","segs":[{"pos":"n.","def":"车库"}]},{"id":659,"word":"management","phonetic":"ˈmænɪdʒmənt","segs":[{"pos":"n.","def":"管理"}]},{"id":660,"word":"empty","phonetic":"ˈempti","segs":[{"pos":"adj.","def":"空的"}]},{"id":661,"word":"gather","phonetic":"ˈɡæðər","segs":[{"pos":"v.","def":"聚集，聚合"}]},{"id":662,"word":"tremendous","phonetic":"trəˈmendəs","segs":[{"pos":"adj.","def":"巨大的，极大的"}]},{"id":663,"word":"limited","phonetic":"ˈlɪmɪtɪd","segs":[{"pos":"adj.","def":"有限的"}]},{"id":664,"word":"predator","phonetic":"ˈpredətər","segs":[{"pos":"n.","def":"捕食性动物；掠夺者"}]},{"id":665,"word":"deadline","phonetic":"ˈdedlaɪn","segs":[{"pos":"n.","def":"最后期限"}]},{"id":666,"word":"violate","phonetic":"ˈvaɪəleɪt","segs":[{"pos":"v.","def":"违反"}]},{"id":667,"word":"analogy","phonetic":"əˈnælədʒi","segs":[{"pos":"n.","def":"类比；比喻"}]},{"id":668,"word":"require","phonetic":"rɪˈkwaɪər","segs":[{"pos":"v.","def":"要求"}]},{"id":669,"word":"statue","phonetic":"ˈstætʃuː","segs":[{"pos":"n.","def":"像"}]},{"id":670,"word":"closet","phonetic":"ˈklɑːzɪt","segs":[{"pos":"n.","def":"壁橱"}]},{"id":671,"word":"offend","phonetic":"əˈfend","segs":[{"pos":"v.","def":"犯；冒犯"}]},{"id":672,"word":"reputation","phonetic":"ˌrepjʊˈteɪʃən","segs":[{"pos":"n.","def":"名声，声誉"}]},{"id":673,"word":"boundary","phonetic":"ˈbaʊndəri","segs":[{"pos":"n.","def":"边界，界限"}]},{"id":674,"word":"employ","phonetic":"ɪmˈplɔɪ","segs":[{"pos":"v.","def":"雇用，采用"}]},{"id":675,"word":"confirm","phonetic":"kənˈfɜːrm","segs":[{"pos":"v.","def":"证实；使坚定"}]},{"id":676,"word":"displace","phonetic":"dɪsˈpleɪs","segs":[{"pos":"v.","def":"取代"}]},{"id":677,"word":"lofty","phonetic":"ˈlɔːfti","segs":[{"pos":"adj.","def":"高耸的；崇高的"}]},{"id":678,"word":"duplicate","phonetic":"ˈduːplɪkeɪt","segs":[{"pos":"v.","def":"复制；复印"}]},{"id":679,"word":"surplus","phonetic":"ˈsɜːrplʌs","segs":[{"pos":"n.","def":"过剩；盈余"}]},{"id":680,"word":"handicraft","phonetic":"ˈhændikræft","segs":[{"pos":"n.","def":"手工艺品"}]},{"id":681,"word":"institution","phonetic":"ˌɪnstɪˈtuːʃən","segs":[{"pos":"n.","def":"机构，制度"}]},{"id":682,"word":"deduce","phonetic":"dɪˈduːs","segs":[{"pos":"v.","def":"推论；推断"}]},{"id":683,"word":"exclaim","phonetic":"ɪkˈskleɪm","segs":[{"pos":"v.","def":"惊叫；呼喊"}]},{"id":684,"word":"contemporary","phonetic":"kənˈtempəreri","segs":[{"pos":"adj.","def":"当代的"}]},{"id":685,"word":"automate","phonetic":"ˈɔːtəmeɪt","segs":[{"pos":"v.","def":"使自动化"}]},{"id":686,"word":"suspect","phonetic":"səˈspekt","segs":[{"pos":"v.","def":"怀疑"},{"pos":"n.","def":"嫌疑"}]},{"id":687,"word":"bearing","phonetic":"ˈberɪŋ","segs":[{"pos":"n.","def":"关系；方位"}]},{"id":688,"word":"magnitude","phonetic":"ˈmæɡnɪtuːd","segs":[{"pos":"n.","def":"巨大，重大"}]},{"id":689,"word":"nation","phonetic":"ˈneɪʃən","segs":[{"pos":"n.","def":"国家"}]},{"id":690,"word":"gray","phonetic":"ɡreɪ","segs":[{"pos":"adj.","def":"灰色的"},{"pos":"n.","def":"灰色"}]},{"id":691,"word":"familiar","phonetic":"fəˈmɪljər","segs":[{"pos":"adj.","def":"熟悉的"}]},{"id":692,"word":"analyze","phonetic":"ˈænəlaɪz","segs":[{"pos":"v.","def":"分析"}]},{"id":693,"word":"height","phonetic":"haɪt","segs":[{"pos":"n.","def":"高度"}]},{"id":694,"word":"connotation","phonetic":"ˌkɑːnəˈteɪʃən","segs":[{"pos":"n.","def":"含义，内涵"}]},{"id":695,"word":"formal","phonetic":"ˈfɔːrməl","segs":[{"pos":"adj.","def":"正式的"}]},{"id":696,"word":"livelihood","phonetic":"ˈlaɪvlihʊd","segs":[{"pos":"n.","def":"生计，营生"}]},{"id":697,"word":"suit","phonetic":"suːt","segs":[{"pos":"v.","def":"适合"},{"pos":"n.","def":"套装"}]},{"id":698,"word":"fraud","phonetic":"frɔːd","segs":[{"pos":"n.","def":"诈骗，骗子"}]},{"id":699,"word":"hypocrisy","phonetic":"hɪˈpɑːkrəsi","segs":[{"pos":"n.","def":"虚伪；伪善"}]},{"id":700,"word":"dessert","phonetic":"dɪˈzɜːrt","segs":[{"pos":"n.","def":"甜点，甜食"}]},{"id":701,"word":"credit","phonetic":"ˈkredɪt","segs":[{"pos":"n.","def":"信用，学分"}]},{"id":702,"word":"stage","phonetic":"steɪdʒ","segs":[{"pos":"n.","def":"阶段；舞台"}]},{"id":703,"word":"economic","phonetic":"ˌiːkəˈnɑːmɪk","segs":[{"pos":"adj.","def":"经济的"}]},{"id":704,"word":"chase","phonetic":"tʃeɪs","segs":[{"pos":"v.","def":"追求，追赶"}]},{"id":705,"word":"issue","phonetic":"ˈɪʃuː","segs":[{"pos":"n.","def":"问题"},{"pos":"v.","def":"发布"}]},{"id":706,"word":"international","phonetic":"ˌɪntərˈnæʃənəl","segs":[{"pos":"adj.","def":"国际的"}]},{"id":707,"word":"exhaust","phonetic":"ɪɡˈzɔːst","segs":[{"pos":"v.","def":"耗尽，使筋疲力尽"}]},{"id":708,"word":"fascinating","phonetic":"ˈfæsɪneɪtɪŋ","segs":[{"pos":"adj.","def":"迷人的"}]},{"id":709,"word":"remote","phonetic":"rɪˈmoʊt","segs":[{"pos":"adj.","def":"遥远的"}]},{"id":710,"word":"ratio","phonetic":"ˈreɪʃioʊ","segs":[{"pos":"n.","def":"比率；比例"}]},{"id":711,"word":"announce","phonetic":"əˈnaʊns","segs":[{"pos":"v.","def":"宣布"}]},{"id":712,"word":"endure","phonetic":"ɪnˈdʊr","segs":[{"pos":"v.","def":"忍受，持续"}]},{"id":713,"word":"obligation","phonetic":"ˌɑːblɪˈɡeɪʃən","segs":[{"pos":"n.","def":"义务"}]},{"id":714,"word":"item","phonetic":"ˈaɪtəm","segs":[{"pos":"n.","def":"物品，项目"}]},{"id":715,"word":"capable","phonetic":"ˈkeɪpəbəl","segs":[{"pos":"adj.","def":"有能力的；能干的"}]},{"id":716,"word":"guarantee","phonetic":"ˌɡærənˈtiː","segs":[{"pos":"n.","def":"保证"}]},{"id":717,"word":"significant","phonetic":"sɪɡˈnɪfɪkənt","segs":[{"pos":"adj.","def":"重要的，意义重大的"}]},{"id":718,"word":"circus","phonetic":"ˈsɜːrkəs","segs":[{"pos":"n.","def":"马戏团"}]},{"id":719,"word":"principal","phonetic":"ˈprɪnsəpəl","segs":[{"pos":"adj.","def":"主要的"},{"pos":"n.","def":"校长"}]},{"id":720,"word":"rectify","phonetic":"ˈrektɪfaɪ","segs":[{"pos":"v.","def":"纠正，改正"}]},{"id":721,"word":"hypocritical","phonetic":"ˌhɪpəˈkrɪtɪkəl","segs":[{"pos":"adj.","def":"虚伪的"}]},{"id":722,"word":"besiege","phonetic":"bɪˈsiːdʒ","segs":[{"pos":"v.","def":"包围；困扰"}]},{"id":723,"word":"immerse","phonetic":"ɪˈmɜːrs","segs":[{"pos":"v.","def":"使沉浸于"}]},{"id":724,"word":"compassion","phonetic":"kəmˈpæʃən","segs":[{"pos":"n.","def":"同情；怜悯"}]},{"id":725,"word":"harness","phonetic":"ˈhɑːrnɪs","segs":[{"pos":"v.","def":"利用；控制"}]},{"id":726,"word":"blame","phonetic":"bleɪm","segs":[{"pos":"v.","def":"责怪，把...归咎于"},{"pos":"n.","def":"责备"}]},{"id":727,"word":"counteract","phonetic":"ˌkaʊntərˈækt","segs":[{"pos":"v.","def":"抵制；抵消"}]},{"id":728,"word":"bald","phonetic":"bɔːld","segs":[{"pos":"adj.","def":"无顶的；直截了当的"}]},{"id":729,"word":"incentive","phonetic":"ɪnˈsentɪv","segs":[{"pos":"n.","def":"激励，动力"}]},{"id":730,"word":"appreciate","phonetic":"əˈpriːʃieɪt","segs":[{"pos":"v.","def":"欣赏，理解，增值"}]},{"id":731,"word":"potential","phonetic":"pəˈtenʃəl","segs":[{"pos":"adj.","def":"潜在的，可能的"}]},{"id":732,"word":"domestic","phonetic":"dəˈmestɪk","segs":[{"pos":"adj.","def":"国内的，家用的"}]},{"id":733,"word":"tackle","phonetic":"ˈtækəl","segs":[{"pos":"v.","def":"处理，解决"}]},{"id":734,"word":"solitary","phonetic":"ˈsɑːlɪteri","segs":[{"pos":"adj.","def":"独处的；孤独的"}]},{"id":735,"word":"financial","phonetic":"faɪˈnænʃəl","segs":[{"pos":"adj.","def":"金融的"}]},{"id":736,"word":"eventually","phonetic":"ɪˈventʃuəli","segs":[{"pos":"adv.","def":"最终"}]},{"id":737,"word":"certify","phonetic":"ˈsɜːrtɪfaɪ","segs":[{"pos":"v.","def":"证实，证明"}]},{"id":738,"word":"intense","phonetic":"ɪnˈtens","segs":[{"pos":"adj.","def":"强烈的"}]},{"id":739,"word":"various","phonetic":"ˈveriəs","segs":[{"pos":"adj.","def":"各种各样的"}]},{"id":740,"word":"minority","phonetic":"maɪˈnɔːrəti","segs":[{"pos":"n.","def":"少数"}]},{"id":741,"word":"overall","phonetic":"ˌoʊvərˈɔːl","segs":[{"pos":"adj.","def":"整体的"},{"pos":"adv.","def":"总体上"}]},{"id":742,"word":"align","phonetic":"əˈlaɪn","segs":[{"pos":"v.","def":"使...一致"}]},{"id":743,"word":"plead","phonetic":"pliːd","segs":[{"pos":"v.","def":"祈求；恳求；为...辩护"}]},{"id":744,"word":"preserve","phonetic":"prɪˈzɜːrv","segs":[{"pos":"v.","def":"维护，保护"}]},{"id":745,"word":"order","phonetic":"ˈɔːrdər","segs":[{"pos":"n.","def":"顺序"},{"pos":"v.","def":"命令"}]},{"id":746,"word":"modify","phonetic":"ˈmɑːdɪfaɪ","segs":[{"pos":"v.","def":"修改，调整"}]},{"id":747,"word":"weird","phonetic":"wɪrd","segs":[{"pos":"adj.","def":"奇怪的"}]},{"id":748,"word":"chew","phonetic":"tʃuː","segs":[{"pos":"v.","def":"咀嚼"}]},{"id":749,"word":"construct","phonetic":"kənˈstrʌkt","segs":[{"pos":"v.","def":"建造；创建"}]},{"id":750,"word":"underestimate","phonetic":"ˌʌndərˈestɪmeɪt","segs":[{"pos":"v.","def":"低估"}]},{"id":751,"word":"subordinate","phonetic":"səˈbɔːrdɪnət","segs":[{"pos":"v.","def":"使从属于"}]},{"id":752,"word":"undergraduate","phonetic":"ˌʌndərˈɡrædʒuət","segs":[{"pos":"n.","def":"本科生"}]},{"id":753,"word":"minus","phonetic":"ˈmaɪnəs","segs":[{"pos":"prep.","def":"减"},{"pos":"adj.","def":"负面的"}]},{"id":754,"word":"ornament","phonetic":"ˈɔːrnəmənt","segs":[{"pos":"n.","def":"装饰品"}]},{"id":755,"word":"versatile","phonetic":"ˈvɜːrsətəl","segs":[{"pos":"adj.","def":"多才多艺的，多功能的"}]},{"id":756,"word":"machine","phonetic":"məˈʃiːn","segs":[{"pos":"n.","def":"机器"}]},{"id":757,"word":"sector","phonetic":"ˈsektər","segs":[{"pos":"n.","def":"部门；领域"}]},{"id":758,"word":"alternative","phonetic":"ɔːlˈtɜːrnətɪv","segs":[{"pos":"n.","def":"可选择的事物"}]},{"id":759,"word":"fold","phonetic":"foʊld","segs":[{"pos":"v.","def":"折叠"}]},{"id":760,"word":"nerve","phonetic":"nɜːrv","segs":[{"pos":"n.","def":"神经，勇气"}]},{"id":761,"word":"element","phonetic":"ˈelɪmənt","segs":[{"pos":"n.","def":"元素，成分"}]},{"id":762,"word":"crude","phonetic":"kruːd","segs":[{"pos":"adj.","def":"天然的；粗糙的"}]},{"id":763,"word":"citizen","phonetic":"ˈsɪtɪzən","segs":[{"pos":"n.","def":"公民"}]},{"id":764,"word":"render","phonetic":"ˈrendər","segs":[{"pos":"v.","def":"使成为；提供"}]},{"id":765,"word":"neglect","phonetic":"nɪˈɡlekt","segs":[{"pos":"v./n.","def":"忽视，忽略"}]},{"id":766,"word":"convince","phonetic":"kənˈvɪns","segs":[{"pos":"v.","def":"说服"}]},{"id":767,"word":"scale","phonetic":"skeɪl","segs":[{"pos":"n.","def":"规模，程度，等级"}]},{"id":768,"word":"manuscript","phonetic":"ˈmænjuskrɪpt","segs":[{"pos":"n.","def":"手稿"}]},{"id":769,"word":"inherit","phonetic":"ɪnˈherɪt","segs":[{"pos":"v.","def":"继承"}]},{"id":770,"word":"susceptible","phonetic":"səˈseptəbəl","segs":[{"pos":"adj.","def":"易受...影响的"}]},{"id":771,"word":"seek","phonetic":"siːk","segs":[{"pos":"v.","def":"寻找"}]},{"id":772,"word":"litter","phonetic":"ˈlɪtər","segs":[{"pos":"n.","def":"垃圾"}]},{"id":773,"word":"extent","phonetic":"ɪkˈstent","segs":[{"pos":"n.","def":"程度，范围"}]},{"id":774,"word":"basis","phonetic":"ˈbeɪsɪs","segs":[{"pos":"n.","def":"基础"}]},{"id":775,"word":"corporation","phonetic":"ˌkɔːrpəˈreɪʃən","segs":[{"pos":"n.","def":"公司"}]},{"id":776,"word":"notorious","phonetic":"noʊˈtɔːriəs","segs":[{"pos":"adj.","def":"臭名昭著的，声名狼藉的"}]},{"id":777,"word":"grave","phonetic":"ɡreɪv","segs":[{"pos":"adj.","def":"严重的"},{"pos":"n.","def":"墓穴"}]},{"id":778,"word":"breakdown","phonetic":"ˈbreɪkdaʊn","segs":[{"pos":"n.","def":"故障；崩溃"}]},{"id":779,"word":"eradicate","phonetic":"ɪˈrædɪkeɪt","segs":[{"pos":"v.","def":"根除；消灭"}]},{"id":780,"word":"replace","phonetic":"rɪˈpleɪs","segs":[{"pos":"v.","def":"代替，取代"}]},{"id":781,"word":"intention","phonetic":"ɪnˈtenʃən","segs":[{"pos":"n.","def":"意图"}]},{"id":782,"word":"abundant","phonetic":"əˈbʌndənt","segs":[{"pos":"adj.","def":"大量的，丰富的"}]},{"id":783,"word":"republic","phonetic":"rɪˈpʌblɪk","segs":[{"pos":"n.","def":"共和国"}]},{"id":784,"word":"enhance","phonetic":"ɪnˈhæns","segs":[{"pos":"v.","def":"提高"}]},{"id":785,"word":"expel","phonetic":"ɪkˈspel","segs":[{"pos":"v.","def":"驱逐；开除"}]},{"id":786,"word":"occupy","phonetic":"ˈɑːkjupaɪ","segs":[{"pos":"v.","def":"占用，居住"}]},{"id":787,"word":"recession","phonetic":"rɪˈseʃən","segs":[{"pos":"n.","def":"退后；经济衰退"}]},{"id":788,"word":"standpoint","phonetic":"ˈstændpɔɪnt","segs":[{"pos":"n.","def":"角度，观点"}]},{"id":789,"word":"ambiguous","phonetic":"æmˈbɪɡjuəs","segs":[{"pos":"adj.","def":"模棱两可的"}]},{"id":790,"word":"comic","phonetic":"ˈkɑːmɪk","segs":[{"pos":"adj.","def":"喜剧的；滑稽的"}]},{"id":791,"word":"assure","phonetic":"əˈʃʊr","segs":[{"pos":"v.","def":"确保，向...保证"}]},{"id":792,"word":"civilian","phonetic":"səˈvɪljən","segs":[{"pos":"n.","def":"平民"},{"pos":"adj.","def":"平民的"}]},{"id":793,"word":"miniature","phonetic":"ˈmɪniətʃər","segs":[{"pos":"n.","def":"微小的模型"}]},{"id":794,"word":"expedition","phonetic":"ˌekspəˈdɪʃən","segs":[{"pos":"n.","def":"远征；短途旅行"}]},{"id":795,"word":"initial","phonetic":"ɪˈnɪʃəl","segs":[{"pos":"adj.","def":"最初的，开始的"}]},{"id":796,"word":"vague","phonetic":"veɪɡ","segs":[{"pos":"adj.","def":"模糊的；不明确的"}]},{"id":797,"word":"appeal","phonetic":"əˈpiːl","segs":[{"pos":"v.","def":"呼吁，有吸引力"},{"pos":"n.","def":"申诉"}]},{"id":798,"word":"swamp","phonetic":"swɑːmp","segs":[{"pos":"n.","def":"沼泽"}]},{"id":799,"word":"profession","phonetic":"prəˈfeʃən","segs":[{"pos":"n.","def":"职业"}]},{"id":800,"word":"cosmetics","phonetic":"kɑːzˈmetɪks","segs":[{"pos":"n.","def":"(pl.) 化妆品"}]},{"id":801,"word":"indicate","phonetic":"ˈɪndɪkeɪt","segs":[{"pos":"v.","def":"表明；表示；指出"}]},{"id":802,"word":"feature","phonetic":"ˈfiːtʃər","segs":[{"pos":"n.","def":"特征"},{"pos":"v.","def":"以...为特色"}]},{"id":803,"word":"ashamed","phonetic":"əˈʃeɪmd","segs":[{"pos":"adj.","def":"惭愧的，羞耻的"}]},{"id":804,"word":"sympathy","phonetic":"ˈsɪmpəθi","segs":[{"pos":"n.","def":"同情，慰问"}]},{"id":805,"word":"pattern","phonetic":"ˈpætərn","segs":[{"pos":"n.","def":"模式"}]},{"id":806,"word":"midday","phonetic":"ˈmɪddeɪ","segs":[{"pos":"n.","def":"中午，正午"}]},{"id":807,"word":"candle","phonetic":"ˈkændəl","segs":[{"pos":"n.","def":"蜡烛"}]},{"id":808,"word":"switch","phonetic":"swɪtʃ","segs":[{"pos":"n.","def":"转换，转变"},{"pos":"n.","def":"开关"}]},{"id":809,"word":"nurture","phonetic":"ˈnɜːrtʃər","segs":[{"pos":"v.","def":"培养"}]},{"id":810,"word":"cable","phonetic":"ˈkeɪbəl","segs":[{"pos":"n.","def":"电缆"}]},{"id":811,"word":"permeate","phonetic":"ˈpɜːrmieɪt","segs":[{"pos":"v.","def":"弥漫；渗透"}]},{"id":812,"word":"present","phonetic":"ˈprezənt","segs":[{"pos":"adj.","def":"现存的，出席的"}]},{"id":813,"word":"moral","phonetic":"ˈmɔːrəl","segs":[{"pos":"adj.","def":"道德的"}]},{"id":814,"word":"devise","phonetic":"dɪˈvaɪz","segs":[{"pos":"v.","def":"发明；设想"}]},{"id":815,"word":"expend","phonetic":"ɪkˈspend","segs":[{"pos":"v.","def":"花费"}]},{"id":816,"word":"supplement","phonetic":"ˈsʌplɪmənt","segs":[{"pos":"n.","def":"增刊，补充"}]},{"id":817,"word":"delicious","phonetic":"dɪˈlɪʃəs","segs":[{"pos":"adj.","def":"美味的"}]},{"id":818,"word":"interest","phonetic":"ˈɪntrəst","segs":[{"pos":"n.","def":"兴趣，利益"}]},{"id":819,"word":"suite","phonetic":"swiːt","segs":[{"pos":"n.","def":"套间；一套家具"}]},{"id":820,"word":"customs","phonetic":"ˈkʌstəmz","segs":[{"pos":"n.","def":"海关"}]},{"id":821,"word":"bureau","phonetic":"ˈbjʊroʊ","segs":[{"pos":"n.","def":"局；科"}]},{"id":822,"word":"manage","phonetic":"ˈmænɪdʒ","segs":[{"pos":"v.","def":"管理，完成"}]},{"id":823,"word":"click","phonetic":"klɪk","segs":[{"pos":"v.","def":"点击；使发出咔嗒声"},{"pos":"n.","def":"单击"}]},{"id":824,"word":"specific","phonetic":"spəˈsɪfɪk","segs":[{"pos":"adj.","def":"具体的"}]},{"id":825,"word":"scrutiny","phonetic":"ˈskruːtəni","segs":[{"pos":"n.","def":"仔细检查"}]},{"id":826,"word":"reservoir","phonetic":"ˈrezərvwɑːr","segs":[{"pos":"n.","def":"水池"}]},{"id":827,"word":"agent","phonetic":"ˈeɪdʒənt","segs":[{"pos":"n.","def":"代理人，经纪人"}]},{"id":828,"word":"pursue","phonetic":"pərˈsuː","segs":[{"pos":"v.","def":"追求，追逐"}]},{"id":829,"word":"improve","phonetic":"ɪmˈpruːv","segs":[{"pos":"v.","def":"改善"}]},{"id":830,"word":"notice","phonetic":"ˈnoʊtɪs","segs":[{"pos":"v./n.","def":"注意"}]},{"id":831,"word":"available","phonetic":"əˈveɪləbəl","segs":[{"pos":"adj.","def":"可用的，可获得的"}]},{"id":832,"word":"brand-new","phonetic":"ˈbrændˈnjuː","segs":[{"pos":"adj.","def":"全新的；崭新的"}]},{"id":833,"word":"principle","phonetic":"ˈprɪnsəpəl","segs":[{"pos":"n.","def":"原则，原理"}]},{"id":834,"word":"cater","phonetic":"ˈkeɪtər","segs":[{"pos":"v.","def":"满足...的需要，迎合"}]},{"id":835,"word":"rigid","phonetic":"ˈrɪdʒɪd","segs":[{"pos":"adj.","def":"刻板的，严格的"}]},{"id":836,"word":"illuminate","phonetic":"ɪˈluːmɪneɪt","segs":[{"pos":"v.","def":"照亮；阐明"}]},{"id":837,"word":"diligent","phonetic":"ˈdɪlɪdʒənt","segs":[{"pos":"adj.","def":"勤勉的，勤劳的"}]},{"id":838,"word":"invade","phonetic":"ɪnˈveɪd","segs":[{"pos":"v.","def":"侵犯"}]},{"id":839,"word":"eligible","phonetic":"ˈelɪdʒəbəl","segs":[{"pos":"adj.","def":"合格的，有资格的"}]},{"id":840,"word":"impulse","phonetic":"ˈɪmpʌls","segs":[{"pos":"n.","def":"冲动；刺激"}]},{"id":841,"word":"manner","phonetic":"ˈmænər","segs":[{"pos":"n.","def":"方式"}]},{"id":842,"word":"oblige","phonetic":"əˈblaɪdʒ","segs":[{"pos":"v.","def":"使...感恩；帮忙"}]},{"id":843,"word":"introduce","phonetic":"ˌɪntrəˈduːs","segs":[{"pos":"v.","def":"介绍"}]},{"id":844,"word":"naive","phonetic":"naɪˈiːv","segs":[{"pos":"adj.","def":"天真的；幼稚的"}]},{"id":845,"word":"weep","phonetic":"wiːp","segs":[{"pos":"v./n.","def":"流泪；哭泣"}]},{"id":846,"word":"accustom","phonetic":"əˈkʌstəm","segs":[{"pos":"v.","def":"使习惯；使适应"}]},{"id":847,"word":"cosy","phonetic":"ˈkoʊzi","segs":[{"pos":"adj.","def":"舒适的；亲切的"}]},{"id":848,"word":"fatal","phonetic":"ˈfeɪtəl","segs":[{"pos":"adj.","def":"致命的"}]},{"id":849,"word":"cuisine","phonetic":"kwɪˈziːn","segs":[{"pos":"n.","def":"菜肴；烹饪"}]},{"id":850,"word":"severe","phonetic":"səˈvɪr","segs":[{"pos":"adj.","def":"严重的"}]},{"id":851,"word":"rural","phonetic":"ˈrʊrəl","segs":[{"pos":"adj.","def":"乡村的"}]},{"id":852,"word":"opt","phonetic":"ɑːpt","segs":[{"pos":"v.","def":"选择"}]},{"id":853,"word":"mirror","phonetic":"ˈmɪrər","segs":[{"pos":"n.","def":"镜子"},{"pos":"v.","def":"反射"}]},{"id":854,"word":"code","phonetic":"koʊd","segs":[{"pos":"n.","def":"密码；行为准则"}]},{"id":855,"word":"confer","phonetic":"kənˈfɜːr","segs":[{"pos":"v.","def":"协商；授予"}]},{"id":856,"word":"current","phonetic":"ˈkɜːrənt","segs":[{"pos":"adj.","def":"当前的，流行的"}]},{"id":857,"word":"transaction","phonetic":"trænˈzækʃən","segs":[{"pos":"n.","def":"交易"}]},{"id":858,"word":"acquire","phonetic":"əˈkwaɪər","segs":[{"pos":"v.","def":"获得，得到"}]},{"id":859,"word":"expand","phonetic":"ɪkˈspænd","segs":[{"pos":"v.","def":"扩大"}]},{"id":860,"word":"strategy","phonetic":"ˈstrætədʒi","segs":[{"pos":"n.","def":"策略"}]},{"id":861,"word":"represent","phonetic":"ˌreprɪˈzent","segs":[{"pos":"v.","def":"展现，代表"}]},{"id":862,"word":"abide","phonetic":"əˈbaɪd","segs":[{"pos":"v.","def":"容忍；逗留"}]},{"id":863,"word":"forum","phonetic":"ˈfɔːrəm","segs":[{"pos":"n.","def":"论坛"}]},{"id":864,"word":"submerge","phonetic":"səbˈmɜːdʒ","segs":[{"pos":"v.","def":"淹没"}]},{"id":865,"word":"contest","phonetic":"ˈkɑːntest","segs":[{"pos":"n.","def":"比赛；竞争"}]},{"id":866,"word":"dramatic","phonetic":"drəˈmætɪk","segs":[{"pos":"adj.","def":"戏剧性的，巨大的"}]},{"id":867,"word":"delicacy","phonetic":"ˈdelɪkəsi","segs":[{"pos":"n.","def":"美食；细腻"}]},{"id":868,"word":"domain","phonetic":"doʊˈmeɪn","segs":[{"pos":"n.","def":"领域，范围"}]},{"id":869,"word":"extend","phonetic":"ɪkˈstend","segs":[{"pos":"v.","def":"延伸，扩大"}]},{"id":870,"word":"accommodate","phonetic":"əˈkɑːmədeɪt","segs":[{"pos":"v.","def":"容纳"}]},{"id":871,"word":"manage","phonetic":"ˈmænɪdʒ","segs":[{"pos":"v.","def":"管理"}]},{"id":872,"word":"concern","phonetic":"kənˈsɜːrn","segs":[{"pos":"v.","def":"涉及，担忧"},{"pos":"n.","def":"关心"}]},{"id":873,"word":"wipe","phonetic":"waɪp","segs":[{"pos":"v.","def":"擦拭，抹掉"}]},{"id":874,"word":"inspect","phonetic":"ɪnˈspekt","segs":[{"pos":"v.","def":"检查"}]},{"id":875,"word":"scarce","phonetic":"skers","segs":[{"pos":"adj.","def":"缺乏的；不足的"}]},{"id":876,"word":"dose","phonetic":"doʊs","segs":[{"pos":"n.","def":"一次（药）剂量"}]},{"id":877,"word":"extract","phonetic":"ɪkˈstrækt","segs":[{"pos":"v.","def":"提取，摘录"},{"pos":"n.","def":"摘录"}]},{"id":878,"word":"estimate","phonetic":"ˈestɪmeɪt","segs":[{"pos":"v./n.","def":"估计"}]},{"id":879,"word":"disperse","phonetic":"dɪˈspɜːrs","segs":[{"pos":"v.","def":"使分散；散开"}]},{"id":880,"word":"scatter","phonetic":"ˈskætər","segs":[{"pos":"v.","def":"散开；分散"}]},{"id":881,"word":"attitude","phonetic":"ˈætɪtuːd","segs":[{"pos":"n.","def":"态度"}]},{"id":882,"word":"secret","phonetic":"ˈsiːkrɪt","segs":[{"pos":"adj.","def":"秘密的，机密的"},{"pos":"n.","def":"秘密"}]},{"id":883,"word":"means","phonetic":"miːnz","segs":[{"pos":"n.","def":"方法"}]},{"id":884,"word":"shade","phonetic":"ʃeɪd","segs":[{"pos":"n.","def":"阴凉处，阴影"}]},{"id":885,"word":"curve","phonetic":"kɜːv","segs":[{"pos":"n.","def":"曲线"},{"pos":"v.","def":"使成曲线"}]},{"id":886,"word":"reconcile","phonetic":"ˈrekənsaɪl","segs":[{"pos":"v.","def":"使一致；调和"}]},{"id":887,"word":"consolidate","phonetic":"kənˈsɑːlɪdeɪt","segs":[{"pos":"v.","def":"使加强；使巩固"}]},{"id":888,"word":"technology","phonetic":"tekˈnɑːlədʒi","segs":[{"pos":"n.","def":"科技"}]},{"id":889,"word":"grand","phonetic":"ɡrænd","segs":[{"pos":"adj.","def":"巨大的；重大的"}]},{"id":890,"word":"spur","phonetic":"spɜːr","segs":[{"pos":"v./n.","def":"激励；刺激"}]},{"id":891,"word":"certificate","phonetic":"sərˈtɪfɪkət","segs":[{"pos":"n.","def":"证书"}]},{"id":892,"word":"inspire","phonetic":"ɪnˈspaɪər","segs":[{"pos":"v.","def":"鼓励，激发"}]},{"id":893,"word":"endorse","phonetic":"ɪnˈdɔːrs","segs":[{"pos":"v.","def":"支持，赞同"}]},{"id":894,"word":"antique","phonetic":"ænˈtiːk","segs":[{"pos":"adj.","def":"古董的，古老的（有收藏价值的）；"},{"pos":"n.","def":"古董"}]},{"id":895,"word":"blanket","phonetic":"ˈblæŋkɪt","segs":[{"pos":"n.","def":"毯子"}]},{"id":896,"word":"anniversary","phonetic":"ˌænɪˈvɜːrsəri","segs":[{"pos":"n.","def":"周年纪念日"}]},{"id":897,"word":"awful","phonetic":"ˈɔːfəl","segs":[{"pos":"adj.","def":"糟糕的；可怕的"}]},{"id":898,"word":"sovereign","phonetic":"ˈsɑːvrɪn","segs":[{"pos":"n.","def":"君主"},{"pos":"adj.","def":"有主权的"}]},{"id":899,"word":"expert","phonetic":"ˈekspɜːrt","segs":[{"pos":"n.","def":"专家"},{"pos":"adj.","def":"熟练的"}]},{"id":900,"word":"threshold","phonetic":"ˈθreʃhəʊld","segs":[{"pos":"n.","def":"门槛；起始点"}]},{"id":901,"word":"blind","phonetic":"blaɪnd","segs":[{"pos":"adj.","def":"失明的；盲目的"}]},{"id":902,"word":"remain","phonetic":"rɪˈmeɪn","segs":[{"pos":"v.","def":"保持，继续"}]},{"id":903,"word":"expect","phonetic":"ɪkˈspekt","segs":[{"pos":"v.","def":"预期"}]},{"id":904,"word":"obsess","phonetic":"əbˈses","segs":[{"pos":"v.","def":"使着迷，使迷恋"}]},{"id":905,"word":"steep","phonetic":"stiːp","segs":[{"pos":"adj.","def":"陡峭的"}]},{"id":906,"word":"satisfy","phonetic":"ˈsætɪsfaɪ","segs":[{"pos":"v.","def":"使满意"}]},{"id":907,"word":"tuition","phonetic":"tjuˈɪʃən","segs":[{"pos":"n.","def":"学费；指导，讲授"}]},{"id":908,"word":"competent","phonetic":"ˈkɑːmpɪtənt","segs":[{"pos":"adj.","def":"有能力的；合格的"}]},{"id":909,"word":"immigrant","phonetic":"ˈɪmɪɡrənt","segs":[{"pos":"n.","def":"移民，移居"}]},{"id":910,"word":"substitute","phonetic":"ˈsʌbstɪtuːt","segs":[{"pos":"n.","def":"代替物"},{"pos":"v.","def":"代替"}]},{"id":911,"word":"regardless","phonetic":"rɪˈɡɑːrdləs","segs":[{"pos":"adv.","def":"不管，不顾"}]},{"id":912,"word":"rehabilitate","phonetic":"ˌriːhəˈbɪlɪteɪt","segs":[{"pos":"v.","def":"恢复名誉；修复"}]},{"id":913,"word":"interview","phonetic":"ˈɪntərvjuː","segs":[{"pos":"n./v.","def":"面试，采访"}]},{"id":914,"word":"sharp","phonetic":"ʃɑːrp","segs":[{"pos":"adj.","def":"锋利的；鲜明的"}]},{"id":915,"word":"despair","phonetic":"dɪˈsper","segs":[{"pos":"n.","def":"绝望"}]},{"id":916,"word":"install","phonetic":"ɪnˈstɔːl","segs":[{"pos":"v.","def":"安装；使就职"}]},{"id":917,"word":"creep","phonetic":"kriːp","segs":[{"pos":"v.","def":"蹑手蹑脚地移动"}]},{"id":918,"word":"commit","phonetic":"kəˈmɪt","segs":[{"pos":"v.","def":"犯(错/罪)，承诺，保证"}]},{"id":919,"word":"merchandise","phonetic":"ˈmɜːrtʃəndaɪs","segs":[{"pos":"n.","def":"商品"}]},{"id":920,"word":"exhibit","phonetic":"ɪɡˈzɪbɪt","segs":[{"pos":"v.","def":"展出；表现"}]},{"id":921,"word":"graduate","phonetic":"ˈɡrædʒuət","segs":[{"pos":"n.","def":"毕业生"},{"pos":"v.","def":"毕业"}]},{"id":922,"word":"biography","phonetic":"baɪˈɑːɡrəfi","segs":[{"pos":"n.","def":"传记"}]},{"id":923,"word":"irrigate","phonetic":"ˈɪrɪɡeɪt","segs":[{"pos":"v.","def":"灌溉"}]},{"id":924,"word":"overcome","phonetic":"ˌoʊvərˈkʌm","segs":[{"pos":"v.","def":"克服"}]},{"id":925,"word":"pose","phonetic":"poʊz","segs":[{"pos":"v.","def":"造成，引起"},{"pos":"n.","def":"姿势"}]},{"id":926,"word":"breakthrough","phonetic":"ˈbreɪkθruː","segs":[{"pos":"n.","def":"突破"}]},{"id":927,"word":"napkin","phonetic":"ˈnæpkɪn","segs":[{"pos":"n.","def":"餐巾"}]},{"id":928,"word":"attribute","phonetic":"əˈtrɪbjuːt","segs":[{"pos":"v.","def":"把...归因于"}]},{"id":929,"word":"diagnose","phonetic":"ˌdaɪəɡˈnoʊs","segs":[{"pos":"v.","def":"诊断"}]},{"id":930,"word":"economic","phonetic":"ˌiːkəˈnɑːmɪk","segs":[{"pos":"adj.","def":"经济上的"}]},{"id":931,"word":"retail","phonetic":"ˈriːteɪl","segs":[{"pos":"n.","def":"零售"},{"pos":"v.","def":"零售"}]},{"id":932,"word":"organism","phonetic":"ˈɔːrɡənɪzəm","segs":[{"pos":"n.","def":"生物；有机体"}]},{"id":933,"word":"inject","phonetic":"ɪnˈdʒekt","segs":[{"pos":"v.","def":"注射；投入（资金/时间）"}]},{"id":934,"word":"shortcoming","phonetic":"ˈʃɔːrtkʌmɪŋ","segs":[{"pos":"n.","def":"缺点"}]},{"id":935,"word":"shelter","phonetic":"ˈʃeltər","segs":[{"pos":"n.","def":"避难所"},{"pos":"v.","def":"保护"}]},{"id":936,"word":"flavor","phonetic":"ˈfleɪvər","segs":[{"pos":"n.","def":"味道；特色"},{"pos":"v.","def":"给...调味"}]},{"id":937,"word":"dispatch","phonetic":"dɪˈspætʃ","segs":[{"pos":"v.","def":"派遣；发出"}]},{"id":938,"word":"urgent","phonetic":"ˈɜːrdʒənt","segs":[{"pos":"adj.","def":"紧急的"}]},{"id":939,"word":"intangible","phonetic":"ɪnˈtændʒəbəl","segs":[{"pos":"adj.","def":"无形的"}]},{"id":940,"word":"indignant","phonetic":"ɪnˈdɪɡnənt","segs":[{"pos":"adj.","def":"愤怒的"}]},{"id":941,"word":"repeat","phonetic":"rɪˈpiːt","segs":[{"pos":"v.","def":"重复"}]},{"id":942,"word":"trend","phonetic":"trend","segs":[{"pos":"n.","def":"趋势"}]},{"id":943,"word":"predict","phonetic":"prɪˈdɪkt","segs":[{"pos":"v.","def":"预测，预言"}]},{"id":944,"word":"stance","phonetic":"stæns","segs":[{"pos":"n.","def":"立场，态度"}]},{"id":945,"word":"deliberate","phonetic":"dɪˈlɪbərət","segs":[{"pos":"adj.","def":"故意的"},{"pos":"v.","def":"深思熟虑"}]},{"id":946,"word":"composite","phonetic":"kəmˈpɑːzɪt","segs":[{"pos":"adj.","def":"合成的"},{"pos":"n.","def":"合成物"}]},{"id":947,"word":"declare","phonetic":"dɪˈkler","segs":[{"pos":"v.","def":"声明，宣告"}]},{"id":948,"word":"congress","phonetic":"ˈkɑːŋɡrəs","segs":[{"pos":"n.","def":"代表大会；国会"}]},{"id":949,"word":"spoil","phonetic":"spɔɪl","segs":[{"pos":"v.","def":"溺爱；破坏"}]},{"id":950,"word":"consider","phonetic":"kənˈsɪdər","segs":[{"pos":"v.","def":"仔细考虑，认为"}]},{"id":951,"word":"orthodox","phonetic":"ˈɔːrθədɑːks","segs":[{"pos":"adj.","def":"正统的，传统的"}]},{"id":952,"word":"share","phonetic":"ʃer","segs":[{"pos":"n.","def":"股份"},{"pos":"v.","def":"分享"}]},{"id":953,"word":"excessive","phonetic":"ɪkˈsesɪv","segs":[{"pos":"adj.","def":"过度的"}]},{"id":954,"word":"vacation","phonetic":"veɪˈkeɪʃən","segs":[{"pos":"n.","def":"假期"}]},{"id":955,"word":"image","phonetic":"ˈɪmɪdʒ","segs":[{"pos":"n.","def":"形象"}]},{"id":956,"word":"rent","phonetic":"rent","segs":[{"pos":"n.","def":"租金"},{"pos":"v.","def":"租借"}]},{"id":957,"word":"scratch","phonetic":"skrætʃ","segs":[{"pos":"v.","def":"抓；挠"}]},{"id":958,"word":"reproduce","phonetic":"ˌriːprəˈdjuːs","segs":[{"pos":"v.","def":"复制，繁殖"}]},{"id":959,"word":"worthy","phonetic":"ˈwɜːrði","segs":[{"pos":"adj.","def":"有价值的；值得...的"}]},{"id":960,"word":"magnet","phonetic":"ˈmæɡnɪt","segs":[{"pos":"n.","def":"磁铁"}]},{"id":961,"word":"noteworthy","phonetic":"ˈnoʊtwɜːrði","segs":[{"pos":"adj.","def":"值得注意的"}]},{"id":962,"word":"thorough","phonetic":"ˈθɜːroʊ","segs":[{"pos":"adj.","def":"彻底的，完全的"}]},{"id":963,"word":"illegal","phonetic":"ɪˈliːɡəl","segs":[{"pos":"adj.","def":"非法的"}]},{"id":964,"word":"hinder","phonetic":"ˈhɪndər","segs":[{"pos":"v.","def":"妨碍，牵制"}]},{"id":965,"word":"violent","phonetic":"ˈvaɪələnt","segs":[{"pos":"adj.","def":"猛烈的；暴力的"}]},{"id":966,"word":"remedy","phonetic":"ˈremədi","segs":[{"pos":"n.","def":"解决方法，疗法"}]},{"id":967,"word":"chronicle","phonetic":"ˈkrɑːnɪkəl","segs":[{"pos":"n.","def":"编年史"}]},{"id":968,"word":"integrity","phonetic":"ɪnˈteɡrəti","segs":[{"pos":"n.","def":"正直；诚实"}]},{"id":969,"word":"anxious","phonetic":"ˈæŋkʃəs","segs":[{"pos":"adj.","def":"焦虑的，急切的"}]},{"id":970,"word":"curtain","phonetic":"ˈkɜːrtən","segs":[{"pos":"n.","def":"窗帘"}]},{"id":971,"word":"component","phonetic":"kəmˈpoʊnənt","segs":[{"pos":"n.","def":"成分，部件"}]},{"id":972,"word":"console","phonetic":"kənˈsoʊl","segs":[{"pos":"v.","def":"安慰"}]},{"id":973,"word":"opposite","phonetic":"ˈɑːpəzɪt","segs":[{"pos":"adj.","def":"相反的；反面的"}]},{"id":974,"word":"scenario","phonetic":"səˈnærioʊ","segs":[{"pos":"n.","def":"可能发生的情况"}]},{"id":975,"word":"object","phonetic":"əbˈdʒekt","segs":[{"pos":"v.","def":"反对"},{"pos":"n.","def":"物体，目标"}]},{"id":976,"word":"implication","phonetic":"ˌɪmplɪˈkeɪʃən","segs":[{"pos":"n.","def":"含义，牵连"}]},{"id":977,"word":"recognize","phonetic":"ˈrekəɡnaɪz","segs":[{"pos":"v.","def":"认出；识别"}]},{"id":978,"word":"intuition","phonetic":"ˌɪntuˈɪʃən","segs":[{"pos":"n.","def":"直觉"}]},{"id":979,"word":"swallow","phonetic":"ˈswɑːloʊ","segs":[{"pos":"v.","def":"吞下，吞没"}]},{"id":980,"word":"media","phonetic":"ˈmiːdiə","segs":[{"pos":"n.","def":"媒体"}]},{"id":981,"word":"literal","phonetic":"ˈlɪtərəl","segs":[{"pos":"adj.","def":"字面意义的；确确实实的"}]},{"id":982,"word":"surpass","phonetic":"sərˈpæs","segs":[{"pos":"v.","def":"超过"}]},{"id":983,"word":"discard","phonetic":"dɪsˈkɑːrd","segs":[{"pos":"v.","def":"抛弃；丢弃"}]},{"id":984,"word":"profound","phonetic":"prəˈfaʊnd","segs":[{"pos":"adj.","def":"深远的，深奥的"}]},{"id":985,"word":"ignore","phonetic":"ɪɡˈnɔːr","segs":[{"pos":"v.","def":"忽视，不予理睬"}]},{"id":986,"word":"flour","phonetic":"ˈflaʊər","segs":[{"pos":"n.","def":"面粉"}]},{"id":987,"word":"hemisphere","phonetic":"ˈhemɪsfɪr","segs":[{"pos":"n.","def":"半球"}]},{"id":988,"word":"impose","phonetic":"ɪmˈpoʊz","segs":[{"pos":"v.","def":"把...强加于"}]},{"id":989,"word":"huge","phonetic":"hjuːdʒ","segs":[{"pos":"adj.","def":"巨大的"}]},{"id":990,"word":"rehearse","phonetic":"rɪˈhɜːrs","segs":[{"pos":"v.","def":"排练，练习"}]},{"id":991,"word":"evident","phonetic":"ˈevɪdənt","segs":[{"pos":"adj.","def":"明显的，清楚的"}]},{"id":992,"word":"default","phonetic":"dɪˈfɔːlt","segs":[{"pos":"n.","def":"违约，默认值"}]},{"id":993,"word":"deplete","phonetic":"dɪˈpliːt","segs":[{"pos":"v.","def":"耗尽，耗竭"}]},{"id":994,"word":"viable","phonetic":"ˈvaɪəbəl","segs":[{"pos":"adj.","def":"可行的"}]},{"id":995,"word":"linger","phonetic":"ˈlɪŋɡər","segs":[{"pos":"v.","def":"继续留存；逗留"}]},{"id":996,"word":"adhere","phonetic":"ədˈhɪr","segs":[{"pos":"v.","def":"附着；遵守"}]},{"id":997,"word":"silk","phonetic":"sɪlk","segs":[{"pos":"n.","def":"丝绸，蚕丝"}]},{"id":998,"word":"tempt","phonetic":"tempt","segs":[{"pos":"v.","def":"引诱，诱惑"}]},{"id":999,"word":"capacity","phonetic":"kəˈpæsəti","segs":[{"pos":"n.","def":"能力，容积"}]},{"id":1000,"word":"conspire","phonetic":"kənˈspaɪər","segs":[{"pos":"v.","def":"密谋"}]},{"id":1001,"word":"legitimate","phonetic":"ləˈdʒɪtɪmət","segs":[{"pos":"adj.","def":"合法的"}]},{"id":1002,"word":"attract","phonetic":"əˈtrækt","segs":[{"pos":"v.","def":"吸引"}]},{"id":1003,"word":"aggravate","phonetic":"ˈæɡrəveɪt","segs":[{"pos":"v.","def":"恶化，使加剧"}]},{"id":1004,"word":"collapse","phonetic":"kəˈlæps","segs":[{"pos":"v.","def":"倒塌，崩溃"}]},{"id":1005,"word":"boxing","phonetic":"ˈbɑːksɪŋ","segs":[{"pos":"n.","def":"拳击"}]},{"id":1006,"word":"distort","phonetic":"dɪˈstɔːrt","segs":[{"pos":"v.","def":"扭曲；歪曲"}]},{"id":1007,"word":"shield","phonetic":"ʃiːld","segs":[{"pos":"v.","def":"保护"},{"pos":"n.","def":"盾牌；屏障"}]},{"id":1008,"word":"layoff","phonetic":"ˈleɪɔːf","segs":[{"pos":"n.","def":"裁员；解雇"}]},{"id":1009,"word":"inertia","phonetic":"ɪˈnɜːrʃə","segs":[{"pos":"n.","def":"惯性；惰性"}]},{"id":1010,"word":"glimpse","phonetic":"ɡlɪmps","segs":[{"pos":"v.","def":"瞥见"},{"pos":"n.","def":"一瞥"}]},{"id":1011,"word":"margin","phonetic":"ˈmɑːrdʒɪn","segs":[{"pos":"n.","def":"边缘，利润"}]},{"id":1012,"word":"afraid","phonetic":"əˈfreɪd","segs":[{"pos":"adj.","def":"害怕的，担心的"}]},{"id":1013,"word":"prestige","phonetic":"preˈstiːʒ","segs":[{"pos":"n.","def":"声望，威望"}]},{"id":1014,"word":"fabricate","phonetic":"ˈfæbrɪkeɪt","segs":[{"pos":"v.","def":"编造；制造"}]},{"id":1015,"word":"situation","phonetic":"ˌsɪtʃuˈeɪʃən","segs":[{"pos":"n.","def":"情况"}]},{"id":1016,"word":"converse","phonetic":"kənˈvɜːrs","segs":[{"pos":"v.","def":"交谈"},{"pos":"adj.","def":"相反的"}]},{"id":1017,"word":"fuel","phonetic":"ˈfjuːəl","segs":[{"pos":"n.","def":"燃料"},{"pos":"v.","def":"给...加燃料，加强，刺激"}]},{"id":1018,"word":"fare","phonetic":"fer","segs":[{"pos":"n.","def":"票价"}]},{"id":1019,"word":"tradition","phonetic":"trəˈdɪʃən","segs":[{"pos":"n.","def":"传统"}]},{"id":1020,"word":"excess","phonetic":"ɪkˈses","segs":[{"pos":"n.","def":"过度"},{"pos":"adj.","def":"额外的，多余的"}]},{"id":1021,"word":"biology","phonetic":"baɪˈɑːlədʒi","segs":[{"pos":"n.","def":"生物学"}]},{"id":1022,"word":"decode","phonetic":"diːˈkoʊd","segs":[{"pos":"v.","def":"解码"}]},{"id":1023,"word":"devastate","phonetic":"ˈdevəsteɪt","segs":[{"pos":"v.","def":"摧毁；严重破坏"}]},{"id":1024,"word":"constitution","phonetic":"ˌkɑːnstɪˈtuːʃən","segs":[{"pos":"n.","def":"宪法；章程"}]},{"id":1025,"word":"ceremony","phonetic":"ˈserəmoʊni","segs":[{"pos":"n.","def":"典礼；仪式"}]},{"id":1026,"word":"metal","phonetic":"ˈmetəl","segs":[{"pos":"n.","def":"金属"}]},{"id":1027,"word":"demonstrate","phonetic":"ˈdemənstreɪt","segs":[{"pos":"v.","def":"说明，展示"}]},{"id":1028,"word":"silent","phonetic":"ˈsaɪlənt","segs":[{"pos":"adj.","def":"沉默的，安静的"}]},{"id":1029,"word":"device","phonetic":"dɪˈvaɪs","segs":[{"pos":"n.","def":"设备；装置"}]},{"id":1030,"word":"graduate","phonetic":"ˈɡrædʒueɪt","segs":[{"pos":"v.","def":"大学毕业"}]},{"id":1031,"word":"offspring","phonetic":"ˈɔːfsprɪŋ","segs":[{"pos":"n.","def":"后代"}]},{"id":1032,"word":"wander","phonetic":"ˈwɑːndər","segs":[{"pos":"v.","def":"漫步，漫游"}]},{"id":1033,"word":"workout","phonetic":"ˈwɜːrkaʊt","segs":[{"pos":"n.","def":"锻炼"}]},{"id":1034,"word":"retain","phonetic":"rɪˈteɪn","segs":[{"pos":"v.","def":"保留，保持"}]},{"id":1035,"word":"opposite","phonetic":"ˈɑːpəzɪt","segs":[{"pos":"adj.","def":"相反的"}]},{"id":1036,"word":"dental","phonetic":"ˈdentəl","segs":[{"pos":"adj.","def":"牙齿的，牙科的"}]},{"id":1037,"word":"dynamic","phonetic":"daɪˈnæmɪk","segs":[{"pos":"adj.","def":"充满活力的，动态的"}]},{"id":1038,"word":"negligent","phonetic":"ˈneɡlɪdʒənt","segs":[{"pos":"adj.","def":"失职的，疏忽的"}]},{"id":1039,"word":"common","phonetic":"ˈkɑːmən","segs":[{"pos":"adj.","def":"普通的，共同的"}]},{"id":1040,"word":"frame","phonetic":"freɪm","segs":[{"pos":"n.","def":"框架，架构；身材"}]},{"id":1041,"word":"operate","phonetic":"ˈɑːpəreɪt","segs":[{"pos":"v.","def":"操作"}]},{"id":1042,"word":"define","phonetic":"dɪˈfaɪn","segs":[{"pos":"v.","def":"下定义"}]},{"id":1043,"word":"solar","phonetic":"ˈsoʊlər","segs":[{"pos":"adj.","def":"太阳的；太阳能的"}]},{"id":1044,"word":"prey","phonetic":"preɪ","segs":[{"pos":"n.","def":"猎物"}]},{"id":1045,"word":"organic","phonetic":"ɔːrˈɡænɪk","segs":[{"pos":"adj.","def":"有机的"}]},{"id":1046,"word":"sacrifice","phonetic":"ˈsækrɪfaɪs","segs":[{"pos":"n.","def":"牺牲"}]},{"id":1047,"word":"balcony","phonetic":"ˈbælkəni","segs":[{"pos":"n.","def":"阳台"}]},{"id":1048,"word":"parameter","phonetic":"pəˈræmɪtər","segs":[{"pos":"n.","def":"参数；决定因素"}]},{"id":1049,"word":"flock","phonetic":"flɑːk","segs":[{"pos":"v.","def":"聚集；蜂拥"},{"pos":"n.","def":"（鸟、羊）群"}]},{"id":1050,"word":"confine","phonetic":"kənˈfaɪn","segs":[{"pos":"v.","def":"限制，限定"}]},{"id":1051,"word":"distribute","phonetic":"dɪˈstrɪbjuːt","segs":[{"pos":"v.","def":"分配，分发"}]},{"id":1052,"word":"finger","phonetic":"ˈfɪŋɡər","segs":[{"pos":"n.","def":"手指"},{"pos":"v.","def":"告发，拨弄"}]},{"id":1053,"word":"credible","phonetic":"ˈkredəbəl","segs":[{"pos":"adj.","def":"可信的，可行的"}]},{"id":1054,"word":"prime","phonetic":"praɪm","segs":[{"pos":"adj.","def":"主要的，首要的"}]},{"id":1055,"word":"bully","phonetic":"ˈbʊli","segs":[{"pos":"v.","def":"欺负"},{"pos":"n.","def":"恃强凌弱者"}]},{"id":1056,"word":"foresight","phonetic":"ˈfɔːrsaɪt","segs":[{"pos":"n.","def":"先见之明"}]},{"id":1057,"word":"due","phonetic":"djuː","segs":[{"pos":"adj.","def":"由于；预计的；到期的；适当的"}]},{"id":1058,"word":"transform","phonetic":"trænsˈfɔːrm","segs":[{"pos":"v.","def":"改变，转变"}]},{"id":1059,"word":"intellectual","phonetic":"ˌɪntəˈlektʃuəl","segs":[{"pos":"adj.","def":"智力的，才智的"}]},{"id":1060,"word":"dedicate","phonetic":"ˈdedɪkeɪt","segs":[{"pos":"v.","def":"把...献给"}]},{"id":1061,"word":"given","phonetic":"ˈɡɪvən","segs":[{"pos":"prep.","def":"鉴于"},{"pos":"adj.","def":"规定的，指定的"}]},{"id":1062,"word":"embody","phonetic":"ɪmˈbɑːdi","segs":[{"pos":"v.","def":"体现"}]},{"id":1063,"word":"performance","phonetic":"pərˈfɔːrməns","segs":[{"pos":"n.","def":"表现，性能"}]},{"id":1064,"word":"dim","phonetic":"dɪm","segs":[{"pos":"adj.","def":"昏暗的；模糊的；愚笨的"}]},{"id":1065,"word":"distinct","phonetic":"dɪˈstɪŋkt","segs":[{"pos":"adj.","def":"清晰的，明显的"}]},{"id":1066,"word":"tolerate","phonetic":"ˈtɑːləreɪt","segs":[{"pos":"v.","def":"容忍，忍受"}]},{"id":1067,"word":"tenant","phonetic":"ˈtenənt","segs":[{"pos":"n.","def":"租户；房客"}]},{"id":1068,"word":"landscape","phonetic":"ˈlændskeɪp","segs":[{"pos":"n.","def":"风景，景色"}]},{"id":1069,"word":"hesitate","phonetic":"ˈhezɪteɪt","segs":[{"pos":"v.","def":"犹豫"}]},{"id":1070,"word":"manufacture","phonetic":"ˌmænjʊˈfæktʃər","segs":[{"pos":"v.","def":"制造"}]},{"id":1071,"word":"equal","phonetic":"ˈiːkwəl","segs":[{"pos":"adj.","def":"平等的，同样的"}]},{"id":1072,"word":"dawn","phonetic":"dɔːn","segs":[{"pos":"n.","def":"黎明；开端"}]},{"id":1073,"word":"estate","phonetic":"ɪˈsteɪt","segs":[{"pos":"n.","def":"地产"}]},{"id":1074,"word":"divert","phonetic":"daɪˈvɜːrt","segs":[{"pos":"v.","def":"转化，转变"}]},{"id":1075,"word":"sceptical","phonetic":"ˈskeptɪkəl","segs":[{"pos":"adj.","def":"怀疑的"}]},{"id":1076,"word":"insure","phonetic":"ɪnˈʃʊr","segs":[{"pos":"v.","def":"为...投保"}]},{"id":1077,"word":"painstaking","phonetic":"ˈpeɪnzteɪkɪŋ","segs":[{"pos":"adj.","def":"费力的"}]},{"id":1078,"word":"mature","phonetic":"məˈtʃʊər","segs":[{"pos":"adj.","def":"成熟的"},{"pos":"v.","def":"发育成"}]},{"id":1079,"word":"magnificent","phonetic":"mæɡˈnɪfɪsənt","segs":[{"pos":"adj.","def":"壮丽的"}]},{"id":1080,"word":"tablet","phonetic":"ˈtæblət","segs":[{"pos":"n.","def":"药片"}]},{"id":1081,"word":"sculpture","phonetic":"ˈskʌlptʃər","segs":[{"pos":"n.","def":"雕塑"}]},{"id":1082,"word":"vulgar","phonetic":"ˈvʌlɡər","segs":[{"pos":"adj.","def":"粗俗的；庸俗的"}]},{"id":1083,"word":"overwhelm","phonetic":"ˌoʊvərˈwelm","segs":[{"pos":"v.","def":"压倒；征服"}]},{"id":1084,"word":"concise","phonetic":"kənˈsaɪs","segs":[{"pos":"adj.","def":"简洁的"}]},{"id":1085,"word":"prolong","phonetic":"prəˈlɔːŋ","segs":[{"pos":"v.","def":"延长，拉长"}]},{"id":1086,"word":"affluent","phonetic":"ˈæfluənt","segs":[{"pos":"adj.","def":"富裕的，丰饶的"}]},{"id":1087,"word":"tragedy","phonetic":"ˈtrædʒədi","segs":[{"pos":"n.","def":"悲剧"}]},{"id":1088,"word":"modest","phonetic":"ˈmɑːdɪst","segs":[{"pos":"adj.","def":"谦虚的；些许的"}]},{"id":1089,"word":"dismay","phonetic":"dɪsˈmeɪ","segs":[{"pos":"v.","def":"使惊愕"},{"pos":"n.","def":"惊愕；灰心"}]},{"id":1090,"word":"unemployment","phonetic":"ˌʌnɪmˈplɔɪmənt","segs":[{"pos":"n.","def":"失业"}]},{"id":1091,"word":"mean","phonetic":"miːn","segs":[{"pos":"adj.","def":"吝啬的，平均的"},{"pos":"v.","def":"意思是，打算"}]},{"id":1092,"word":"herd","phonetic":"hɜːrd","segs":[{"pos":"n.","def":"兽群，牧群"}]},{"id":1093,"word":"cognitive","phonetic":"ˈkɑːɡnɪtɪv","segs":[{"pos":"adj.","def":"认知的"}]},{"id":1094,"word":"isolate","phonetic":"ˈaɪsəleɪt","segs":[{"pos":"v.","def":"隔离"}]},{"id":1095,"word":"recycle","phonetic":"ˌriːˈsaɪkəl","segs":[{"pos":"v.","def":"循环利用"}]},{"id":1096,"word":"justice","phonetic":"ˈdʒʌstɪs","segs":[{"pos":"n.","def":"公正；公平"}]},{"id":1097,"word":"repair","phonetic":"rɪˈper","segs":[{"pos":"v.","def":"修理，修补"}]},{"id":1098,"word":"proclaim","phonetic":"prəˈkleɪm","segs":[{"pos":"v.","def":"宣布；声明"}]},{"id":1099,"word":"wonder","phonetic":"ˈwʌndər","segs":[{"pos":"v.","def":"想知道"},{"pos":"n.","def":"惊讶，奇迹"}]},{"id":1100,"word":"attend","phonetic":"əˈtend","segs":[{"pos":"v.","def":"参加，出席；注意"}]},{"id":1101,"word":"natural","phonetic":"ˈnætʃərəl","segs":[{"pos":"adj.","def":"自然的"}]},{"id":1102,"word":"generate","phonetic":"ˈdʒenəreɪt","segs":[{"pos":"v.","def":"产生，引起"}]},{"id":1103,"word":"joint","phonetic":"dʒɔɪnt","segs":[{"pos":"adj.","def":"联合的；共同的"}]},{"id":1104,"word":"structure","phonetic":"ˈstrʌktʃər","segs":[{"pos":"n.","def":"结构"}]},{"id":1105,"word":"illustrate","phonetic":"ˈɪləstreɪt","segs":[{"pos":"v.","def":"举例说明"}]},{"id":1106,"word":"refund","phonetic":"ˈriːfʌnd","segs":[{"pos":"v.","def":"退还"},{"pos":"n.","def":"退款"}]},{"id":1107,"word":"elegant","phonetic":"ˈelɪɡənt","segs":[{"pos":"adj.","def":"优雅的"}]},{"id":1108,"word":"liberal","phonetic":"ˈlɪbərəl","segs":[{"pos":"adj.","def":"自由的"}]},{"id":1109,"word":"intimidate","phonetic":"ɪnˈtɪmɪdeɪt","segs":[{"pos":"v.","def":"恐吓，威胁"}]},{"id":1110,"word":"video","phonetic":"ˈvɪdioʊ","segs":[{"pos":"n.","def":"录像，视频"}]},{"id":1111,"word":"explain","phonetic":"ɪkˈspleɪn","segs":[{"pos":"v.","def":"解释"}]},{"id":1112,"word":"inhabit","phonetic":"ɪnˈhæbɪt","segs":[{"pos":"v.","def":"居住于，栖息于"}]},{"id":1113,"word":"intend","phonetic":"ɪnˈtend","segs":[{"pos":"v.","def":"打算"}]},{"id":1114,"word":"majority","phonetic":"məˈdʒɔːrəti","segs":[{"pos":"n.","def":"多数"}]},{"id":1115,"word":"client","phonetic":"ˈklaɪənt","segs":[{"pos":"n.","def":"客户，委托人"}]},{"id":1116,"word":"allowance","phonetic":"əˈlaʊəns","segs":[{"pos":"n.","def":"津贴；补助"}]},{"id":1117,"word":"specific","phonetic":"spəˈsɪfɪk","segs":[{"pos":"adj.","def":"具体的，特定的"}]},{"id":1118,"word":"rush","phonetic":"rʌʃ","segs":[{"pos":"v.","def":"仓促行事，急着做"},{"pos":"n.","def":"匆忙"}]},{"id":1119,"word":"originate","phonetic":"əˈrɪdʒɪneɪt","segs":[{"pos":"v.","def":"起源；发源"}]},{"id":1120,"word":"evaluate","phonetic":"ɪˈvæljueɪt","segs":[{"pos":"v.","def":"评估；评价"}]},{"id":1121,"word":"triple","phonetic":"ˈtrɪpəl","segs":[{"pos":"adj.","def":"三倍的"},{"pos":"v.","def":"使增至三倍"}]},{"id":1122,"word":"astonish","phonetic":"əˈstɑːnɪʃ","segs":[{"pos":"v.","def":"使吃惊"}]},{"id":1123,"word":"memorandum","phonetic":"ˌmeməˈrændəm","segs":[{"pos":"n.","def":"备忘录"}]},{"id":1124,"word":"suffer","phonetic":"ˈsʌfər","segs":[{"pos":"v.","def":"遭受，忍受"}]},{"id":1125,"word":"investment","phonetic":"ɪnˈvestmənt","segs":[{"pos":"n.","def":"投资"}]},{"id":1126,"word":"culminate","phonetic":"ˈkʌlmɪneɪt","segs":[{"pos":"v.","def":"以...告终"}]},{"id":1127,"word":"adjust","phonetic":"əˈdʒʌst","segs":[{"pos":"v.","def":"调整"}]},{"id":1128,"word":"occasion","phonetic":"əˈkeɪʒən","segs":[{"pos":"n.","def":"场合；时机"}]},{"id":1129,"word":"exhaust","phonetic":"ɪɡˈzɔːst","segs":[{"pos":"v.","def":"耗尽"}]},{"id":1130,"word":"waste","phonetic":"weɪst","segs":[{"pos":"v.","def":"浪费"},{"pos":"n.","def":"浪费，垃圾"}]},{"id":1131,"word":"basement","phonetic":"ˈbeɪsmənt","segs":[{"pos":"n.","def":"地下室"}]},{"id":1132,"word":"manifest","phonetic":"ˈmænɪfest","segs":[{"pos":"adj.","def":"明显的"},{"pos":"v.","def":"显示"}]},{"id":1133,"word":"sanction","phonetic":"ˈsæŋkʃən","segs":[{"pos":"n.","def":"制裁"},{"pos":"v.","def":"批准"}]},{"id":1134,"word":"occur","phonetic":"əˈkɜːr","segs":[{"pos":"v.","def":"发生，存在于"}]},{"id":1135,"word":"suspend","phonetic":"səˈspend","segs":[{"pos":"v.","def":"悬挂；暂停"}]},{"id":1136,"word":"detrimental","phonetic":"ˌdetrɪˈmentəl","segs":[{"pos":"adj.","def":"有害的"}]},{"id":1137,"word":"bang","phonetic":"bæŋ","segs":[{"pos":"v.","def":"猛敲"},{"pos":"n.","def":"突然的巨响"}]},{"id":1138,"word":"external","phonetic":"ɪkˈstɜːrnəl","segs":[{"pos":"adj.","def":"外部的"}]},{"id":1139,"word":"expose","phonetic":"ɪkˈspoʊz","segs":[{"pos":"v.","def":"暴露"}]},{"id":1140,"word":"institute","phonetic":"ˈɪnstɪtuːt","segs":[{"pos":"n.","def":"机构"},{"pos":"v.","def":"建立"}]},{"id":1141,"word":"upright","phonetic":"ˈʌpraɪt","segs":[{"pos":"adj.","def":"正直的，直立的"}]},{"id":1142,"word":"commend","phonetic":"kəˈmend","segs":[{"pos":"v.","def":"推荐，表扬"}]},{"id":1143,"word":"assist","phonetic":"əˈsɪst","segs":[{"pos":"v.","def":"帮助，协助"}]},{"id":1144,"word":"via","phonetic":"ˈvaɪə","segs":[{"pos":"prep.","def":"凭借，通过"}]},{"id":1145,"word":"devote","phonetic":"dɪˈvoʊt","segs":[{"pos":"v.","def":"献身；致力于"}]},{"id":1146,"word":"livestock","phonetic":"ˈlaɪvstɑːk","segs":[{"pos":"n.","def":"牲口；牧畜"}]},{"id":1147,"word":"discourse","phonetic":"ˈdɪskɔːrs","segs":[{"pos":"n.","def":"演讲，语篇"}]},{"id":1148,"word":"capital","phonetic":"ˈkæpɪtəl","segs":[{"pos":"n.","def":"首都，资本；大写字母"}]},{"id":1149,"word":"innovation","phonetic":"ˌɪnəˈveɪʃən","segs":[{"pos":"n.","def":"创新"}]},{"id":1150,"word":"temperature","phonetic":"ˈtemprətʃər","segs":[{"pos":"n.","def":"温度，气温"}]},{"id":1151,"word":"compel","phonetic":"kəmˈpel","segs":[{"pos":"v.","def":"强迫，迫使"}]},{"id":1152,"word":"dome","phonetic":"doʊm","segs":[{"pos":"n.","def":"圆顶"}]},{"id":1153,"word":"sprawl","phonetic":"sprɔːl","segs":[{"pos":"v.","def":"蔓延；伸开四肢坐或躺"}]},{"id":1154,"word":"liquid","phonetic":"ˈlɪkwɪd","segs":[{"pos":"n.","def":"液体"}]},{"id":1155,"word":"insight","phonetic":"ˈɪnsaɪt","segs":[{"pos":"n.","def":"洞察力"}]},{"id":1156,"word":"deficit","phonetic":"ˈdefɪsɪt","segs":[{"pos":"n.","def":"赤字；亏损"}]},{"id":1157,"word":"consume","phonetic":"kənˈsuːm","segs":[{"pos":"v.","def":"消耗，消费"}]},{"id":1158,"word":"interfere","phonetic":"ˌɪntərˈfɪr","segs":[{"pos":"v.","def":"干预，妨碍"}]},{"id":1159,"word":"sentiment","phonetic":"ˈsentɪmənt","segs":[{"pos":"n.","def":"观点；情绪"}]},{"id":1160,"word":"outcome","phonetic":"ˈaʊtkʌm","segs":[{"pos":"n.","def":"结果"}]},{"id":1161,"word":"income","phonetic":"ˈɪnkʌm","segs":[{"pos":"n.","def":"收入"}]},{"id":1162,"word":"perish","phonetic":"ˈperɪʃ","segs":[{"pos":"v.","def":"毁灭，死亡"}]},{"id":1163,"word":"clone","phonetic":"kloʊn","segs":[{"pos":"n.","def":"克隆动物（植物）"},{"pos":"v.","def":"克隆"}]},{"id":1164,"word":"schedule","phonetic":"ˈskedʒuːl","segs":[{"pos":"n.","def":"日程安排；时刻表"}]},{"id":1165,"word":"implement","phonetic":"ˈɪmplɪmənt","segs":[{"pos":"v.","def":"实施，执行"}]},{"id":1166,"word":"negotiate","phonetic":"nɪˈɡoʊʃieɪt","segs":[{"pos":"v.","def":"协商，谈判"}]},{"id":1167,"word":"augment","phonetic":"ɔːɡˈment","segs":[{"pos":"v.","def":"增加；扩大"}]},{"id":1168,"word":"regulate","phonetic":"ˈreɡjuleɪt","segs":[{"pos":"v.","def":"管理，控制"}]},{"id":1169,"word":"weigh","phonetic":"weɪ","segs":[{"pos":"v.","def":"称重，权衡"}]},{"id":1170,"word":"forthcoming","phonetic":"ˌfɔːrθˈkʌmɪŋ","segs":[{"pos":"adj.","def":"即将来临的"}]},{"id":1171,"word":"edible","phonetic":"ˈedəbəl","segs":[{"pos":"adj.","def":"可食用的；能吃的"}]},{"id":1172,"word":"recruit","phonetic":"rɪˈkruːt","segs":[{"pos":"v.","def":"招聘，征召（新兵）"}]},{"id":1173,"word":"ban","phonetic":"bæn","segs":[{"pos":"v.","def":"禁止"}]},{"id":1174,"word":"suffice","phonetic":"səˈfaɪs","segs":[{"pos":"v.","def":"足够，足以"}]},{"id":1175,"word":"implement","phonetic":"ˈɪmplɪmənt","segs":[{"pos":"v.","def":"实施"}]},{"id":1176,"word":"depression","phonetic":"dɪˈpreʃən","segs":[{"pos":"n.","def":"抑郁，萧条"}]},{"id":1177,"word":"manufacture","phonetic":"ˌmænjʊˈfæktʃər","segs":[{"pos":"n.","def":"制造；生产"}]},{"id":1178,"word":"belt","phonetic":"belt","segs":[{"pos":"n.","def":"腰带，皮带"}]},{"id":1179,"word":"spectator","phonetic":"ˈspekteɪtər","segs":[{"pos":"n.","def":"观众"}]},{"id":1180,"word":"incur","phonetic":"ɪnˈkɜːr","segs":[{"pos":"v.","def":"遭受；引起"}]},{"id":1181,"word":"particular","phonetic":"pərˈtɪkjələr","segs":[{"pos":"adj.","def":"特别的，挑剔的"}]},{"id":1182,"word":"intensive","phonetic":"ɪnˈtensɪv","segs":[{"pos":"adj.","def":"密集的，集中的"}]},{"id":1183,"word":"injure","phonetic":"ˈɪndʒər","segs":[{"pos":"v.","def":"伤害，使受伤"}]},{"id":1184,"word":"well-off","phonetic":"ˈwel ˈɔːf","segs":[{"pos":"adj.","def":"富裕的"}]},{"id":1185,"word":"extensive","phonetic":"ɪkˈstensɪv","segs":[{"pos":"adj.","def":"广泛的"}]},{"id":1186,"word":"subtle","phonetic":"ˈsʌtəl","segs":[{"pos":"adj.","def":"微妙的，细微的"}]},{"id":1187,"word":"setting","phonetic":"ˈsetɪŋ","segs":[{"pos":"n.","def":"环境"}]},{"id":1188,"word":"treasure","phonetic":"ˈtreʒər","segs":[{"pos":"n.","def":"财宝"}]},{"id":1189,"word":"temporary","phonetic":"ˈtempəreri","segs":[{"pos":"adj.","def":"临时的；暂时的"}]},{"id":1190,"word":"commercial","phonetic":"kəˈmɜːrʃəl","segs":[{"pos":"adj.","def":"商业的"}]},{"id":1191,"word":"derail","phonetic":"dɪˈreɪl","segs":[{"pos":"v.","def":"脱轨；出轨"}]},{"id":1192,"word":"prove","phonetic":"pruːv","segs":[{"pos":"v.","def":"证明"}]},{"id":1193,"word":"pregnant","phonetic":"ˈpreɡnənt","segs":[{"pos":"adj.","def":"怀孕的"}]},{"id":1194,"word":"cafeteria","phonetic":"ˌkæfəˈtɪriə","segs":[{"pos":"n.","def":"自助餐厅"}]},{"id":1195,"word":"stable","phonetic":"ˈsteɪbəl","segs":[{"pos":"adj.","def":"稳定的，稳重的"}]},{"id":1196,"word":"logic","phonetic":"ˈlɑːdʒɪk","segs":[{"pos":"n.","def":"逻辑"}]},{"id":1197,"word":"deceive","phonetic":"dɪˈsiːv","segs":[{"pos":"v.","def":"欺骗"}]},{"id":1198,"word":"flourish","phonetic":"ˈflɜːrɪʃ","segs":[{"pos":"v.","def":"繁荣；茁壮成长"}]},{"id":1199,"word":"immediate","phonetic":"ɪˈmiːdiət","segs":[{"pos":"adj.","def":"立即的"}]},{"id":1200,"word":"distribute","phonetic":"dɪˈstrɪbjuːt","segs":[{"pos":"v.","def":"分配"}]},{"id":1201,"word":"supreme","phonetic":"sʊˈpriːm","segs":[{"pos":"adj.","def":"最高的，至高无上的"}]},{"id":1202,"word":"extinct","phonetic":"ɪkˈstɪŋkt","segs":[{"pos":"adj.","def":"灭绝的"}]},{"id":1203,"word":"clue","phonetic":"kluː","segs":[{"pos":"n.","def":"线索；提示"}]},{"id":1204,"word":"contribute","phonetic":"kənˈtrɪbjuːt","segs":[{"pos":"v.","def":"捐助，贡献"}]},{"id":1205,"word":"renew","phonetic":"rɪˈnuː","segs":[{"pos":"v.","def":"重新开始；更新"}]},{"id":1206,"word":"negotiate","phonetic":"nɪˈɡoʊʃieɪt","segs":[{"pos":"v.","def":"谈判"}]},{"id":1207,"word":"advent","phonetic":"ˈædvent","segs":[{"pos":"n.","def":"到来，出现"}]},{"id":1208,"word":"astronaut","phonetic":"ˈæstrənɔːt","segs":[{"pos":"n.","def":"宇航员"}]},{"id":1209,"word":"increasingly","phonetic":"ɪnˈkriːsɪŋli","segs":[{"pos":"adv.","def":"越来越多地"}]},{"id":1210,"word":"conduct","phonetic":"kənˈdʌkt","segs":[{"pos":"v.","def":"引导，组织"},{"pos":"n.","def":"行为"}]},{"id":1211,"word":"billion","phonetic":"ˈbɪljən","segs":[{"pos":"n.","def":"十亿"}]},{"id":1212,"word":"deprive","phonetic":"dɪˈpraɪv","segs":[{"pos":"v.","def":"剥夺"}]},{"id":1213,"word":"symbol","phonetic":"ˈsɪmbəl","segs":[{"pos":"n.","def":"象征；符号"}]},{"id":1214,"word":"fury","phonetic":"ˈfjʊri","segs":[{"pos":"n.","def":"狂怒"}]},{"id":1215,"word":"generation","phonetic":"ˌdʒenəˈreɪʃən","segs":[{"pos":"n.","def":"一代"}]},{"id":1216,"word":"agitate","phonetic":"ˈædʒɪteɪt","segs":[{"pos":"v.","def":"煽动；激怒"}]},{"id":1217,"word":"pioneer","phonetic":"ˌpaɪəˈnɪr","segs":[{"pos":"n.","def":"先驱；拓荒者"}]},{"id":1218,"word":"stupid","phonetic":"ˈstuːpɪd","segs":[{"pos":"adj.","def":"愚蠢的，糊涂的"}]},{"id":1219,"word":"civil","phonetic":"ˈsɪvəl","segs":[{"pos":"adj.","def":"公民的，国民的"}]},{"id":1220,"word":"necessity","phonetic":"nəˈsesəti","segs":[{"pos":"n.","def":"必要，必需品"}]},{"id":1221,"word":"toxic","phonetic":"ˈtɑːksɪk","segs":[{"pos":"adj.","def":"有毒的"}]},{"id":1222,"word":"exclude","phonetic":"ɪkˈskluːd","segs":[{"pos":"v.","def":"排除"}]},{"id":1223,"word":"economy","phonetic":"ɪˈkɑːnəmi","segs":[{"pos":"n.","def":"经济"}]},{"id":1224,"word":"terrace","phonetic":"ˈterəs","segs":[{"pos":"n.","def":"平台"}]},{"id":1225,"word":"ancient","phonetic":"ˈeɪnʃənt","segs":[{"pos":"adj.","def":"古老的；古代的"}]},{"id":1226,"word":"survive","phonetic":"sərˈvaɪv","segs":[{"pos":"v.","def":"幸存，生存"}]},{"id":1227,"word":"enforce","phonetic":"ɪnˈfɔːrs","segs":[{"pos":"v.","def":"强制执行，强迫"}]},{"id":1228,"word":"yield","phonetic":"jiːld","segs":[{"pos":"n.","def":"产量"},{"pos":"v.","def":"出产；屈服"}]},{"id":1229,"word":"incentive","phonetic":"ɪnˈsentɪv","segs":[{"pos":"n.","def":"激励"}]},{"id":1230,"word":"unique","phonetic":"juˈniːk","segs":[{"pos":"adj.","def":"独一无二的"}]},{"id":1231,"word":"trait","phonetic":"treɪt","segs":[{"pos":"n.","def":"特征；特性"}]},{"id":1232,"word":"routine","phonetic":"ruːˈtiːn","segs":[{"pos":"adj.","def":"常规的，例行的"},{"pos":"n.","def":"常规"}]},{"id":1233,"word":"beyond","phonetic":"bɪˈjɑːnd","segs":[{"pos":"prep.","def":"超出"}]},{"id":1234,"word":"respective","phonetic":"rɪˈspektɪv","segs":[{"pos":"adj.","def":"各自的"}]},{"id":1235,"word":"intervene","phonetic":"ˌɪntərˈviːn","segs":[{"pos":"v.","def":"干预"}]},{"id":1236,"word":"artificial","phonetic":"ˌɑːrtɪˈfɪʃəl","segs":[{"pos":"adj.","def":"人工的，人造的"}]},{"id":1237,"word":"explore","phonetic":"ɪkˈsplɔːr","segs":[{"pos":"v.","def":"探索"}]},{"id":1238,"word":"submit","phonetic":"səbˈmɪt","segs":[{"pos":"v.","def":"顺从，提交"}]},{"id":1239,"word":"guarantee","phonetic":"ˌɡærənˈtiː","segs":[{"pos":"n./v.","def":"保证"}]},{"id":1240,"word":"instruction","phonetic":"ɪnˈstrʌkʃən","segs":[{"pos":"n.","def":"指示，教学"}]},{"id":1241,"word":"supper","phonetic":"ˈsʌpər","segs":[{"pos":"n.","def":"晚饭，夜宵"}]},{"id":1242,"word":"fake","phonetic":"feɪk","segs":[{"pos":"adj.","def":"伪造的"}]},{"id":1243,"word":"stimulate","phonetic":"ˈstɪmjuleɪt","segs":[{"pos":"v.","def":"刺激，促使"}]},{"id":1244,"word":"dissident","phonetic":"ˈdɪsɪdənt","segs":[{"pos":"n.","def":"持不同政见者"}]},{"id":1245,"word":"resign","phonetic":"rɪˈzaɪn","segs":[{"pos":"v.","def":"辞去，辞职"}]},{"id":1246,"word":"stuff","phonetic":"stʌf","segs":[{"pos":"n.","def":"物品，东西"},{"pos":"v.","def":"填满"}]},{"id":1247,"word":"access","phonetic":"ˈækses","segs":[{"pos":"n.","def":"机会，通道"},{"pos":"v.","def":"进入，获取"}]},{"id":1248,"word":"fortune","phonetic":"ˈfɔːrtʃən","segs":[{"pos":"n.","def":"运气，财富"}]},{"id":1249,"word":"summit","phonetic":"ˈsʌmɪt","segs":[{"pos":"n.","def":"峰会；顶峰"}]},{"id":1250,"word":"complain","phonetic":"kəmˈpleɪn","segs":[{"pos":"v.","def":"抱怨"}]},{"id":1251,"word":"confront","phonetic":"kənˈfrʌnt","segs":[{"pos":"v.","def":"面临；对峙"}]},{"id":1252,"word":"beverage","phonetic":"ˈbevərɪdʒ","segs":[{"pos":"n.","def":"饮料"}]},{"id":1253,"word":"alien","phonetic":"ˈeɪliən","segs":[{"pos":"adj.","def":"陌生的，国外的"}]},{"id":1254,"word":"refresh","phonetic":"rɪˈfreʃ","segs":[{"pos":"v.","def":"使恢复精力"}]},{"id":1255,"word":"consequent","phonetic":"ˈkɑːnsɪkwənt","segs":[{"pos":"adj.","def":"随之而来的"}]},{"id":1256,"word":"stumble","phonetic":"ˈstʌmbəl","segs":[{"pos":"v.","def":"绊脚；跌跌撞撞地走"}]},{"id":1257,"word":"dazzle","phonetic":"ˈdæzəl","segs":[{"pos":"v.","def":"使眼花缭乱；使目眩"}]},{"id":1258,"word":"amount","phonetic":"əˈmaʊnt","segs":[{"pos":"n.","def":"数量，数额"}]},{"id":1259,"word":"apt","phonetic":"æpt","segs":[{"pos":"adj.","def":"恰当的，有...倾向的"}]},{"id":1260,"word":"enterprise","phonetic":"ˈentərpraɪz","segs":[{"pos":"n.","def":"企业；事业"}]},{"id":1261,"word":"collaborate","phonetic":"kəˈlæbəreɪt","segs":[{"pos":"v.","def":"合作"}]},{"id":1262,"word":"benign","phonetic":"bɪˈnaɪn","segs":[{"pos":"adj.","def":"良性的，良好的"}]},{"id":1263,"word":"leisure","phonetic":"ˈliːʒər","segs":[{"pos":"n.","def":"空闲，闲暇"}]},{"id":1264,"word":"journalism","phonetic":"ˈdʒɜːrnəlɪzəm","segs":[{"pos":"n.","def":"新闻工作"}]},{"id":1265,"word":"necessary","phonetic":"ˈnesəseri","segs":[{"pos":"adj.","def":"必要的"}]},{"id":1266,"word":"debate","phonetic":"dɪˈbeɪt","segs":[{"pos":"v./n.","def":"辩论，讨论"}]},{"id":1267,"word":"cruel","phonetic":"ˈkruːəl","segs":[{"pos":"adj.","def":"残忍的"}]},{"id":1268,"word":"disguise","phonetic":"dɪsˈɡaɪz","segs":[{"pos":"v.","def":"伪装，假装"}]},{"id":1269,"word":"prerequisite","phonetic":"priːˈrekwəzɪt","segs":[{"pos":"n.","def":"前提；先决条件"}]},{"id":1270,"word":"approve","phonetic":"əˈpruːv","segs":[{"pos":"v.","def":"认可；同意"}]},{"id":1271,"word":"intense","phonetic":"ɪnˈtens","segs":[{"pos":"adj.","def":"强烈的，热切的"}]},{"id":1272,"word":"reveal","phonetic":"rɪˈviːl","segs":[{"pos":"v.","def":"揭示；显示"}]},{"id":1273,"word":"aviation","phonetic":"ˌeɪviˈeɪʃən","segs":[{"pos":"n.","def":"航空"}]},{"id":1274,"word":"proceed","phonetic":"prəˈsiːd","segs":[{"pos":"v.","def":"继续；前进"}]},{"id":1275,"word":"myth","phonetic":"mɪθ","segs":[{"pos":"n.","def":"神话"}]},{"id":1276,"word":"interval","phonetic":"ˈɪntərvəl","segs":[{"pos":"n.","def":"间隔；空隙"}]},{"id":1277,"word":"prescribe","phonetic":"prɪˈskraɪb","segs":[{"pos":"v.","def":"开处方"}]},{"id":1278,"word":"widespread","phonetic":"ˈwaɪdspred","segs":[{"pos":"adj.","def":"普遍的，广泛的"}]},{"id":1279,"word":"doubt","phonetic":"daʊt","segs":[{"pos":"v.","def":"怀疑，不确定"}]},{"id":1280,"word":"outset","phonetic":"ˈaʊtset","segs":[{"pos":"n.","def":"开端；开始"}]},{"id":1281,"word":"intelligent","phonetic":"ɪnˈtelɪdʒənt","segs":[{"pos":"adj.","def":"聪明的，智能的"}]},{"id":1282,"word":"appropriate","phonetic":"əˈproʊpriət","segs":[{"pos":"adj.","def":"合适的；恰当的"}]},{"id":1283,"word":"score","phonetic":"skɔːr","segs":[{"pos":"n.","def":"得分，比分"}]},{"id":1284,"word":"physical","phonetic":"ˈfɪzɪkəl","segs":[{"pos":"adj.","def":"物理的，身体的"}]},{"id":1285,"word":"sole","phonetic":"soʊl","segs":[{"pos":"adj.","def":"唯一的；独占的"}]},{"id":1286,"word":"prior","phonetic":"ˈpraɪər","segs":[{"pos":"adj.","def":"先前的，优先的"}]},{"id":1287,"word":"debate","phonetic":"dɪˈbeɪt","segs":[{"pos":"n./v.","def":"辩论"}]},{"id":1288,"word":"consensus","phonetic":"kənˈsensəs","segs":[{"pos":"n.","def":"共识，一致的意见"}]},{"id":1289,"word":"defeat","phonetic":"dɪˈfiːt","segs":[{"pos":"v.","def":"击败"},{"pos":"n.","def":"失败"}]},{"id":1290,"word":"towel","phonetic":"ˈtaʊəl","segs":[{"pos":"n.","def":"手巾"}]},{"id":1291,"word":"outlook","phonetic":"ˈaʊtlʊk","segs":[{"pos":"n.","def":"前景；人生观"}]},{"id":1292,"word":"debt","phonetic":"det","segs":[{"pos":"n.","def":"债务；借款"}]},{"id":1293,"word":"altitude","phonetic":"ˈæltɪtuːd","segs":[{"pos":"n.","def":"海拔"}]},{"id":1294,"word":"elite","phonetic":"eɪˈliːt","segs":[{"pos":"n.","def":"精英"}]},{"id":1295,"word":"purchase","phonetic":"ˈpɜːrtʃəs","segs":[{"pos":"v.","def":"购买"}]},{"id":1296,"word":"judgment","phonetic":"ˈdʒʌdʒmənt","segs":[{"pos":"n.","def":"判断"}]},{"id":1297,"word":"luxury","phonetic":"ˈlʌkʃəri","segs":[{"pos":"n.","def":"奢华，奢侈"}]},{"id":1298,"word":"dwell","phonetic":"dwel","segs":[{"pos":"v.","def":"居住；细想"}]},{"id":1299,"word":"warranty","phonetic":"ˈwɔːrənti","segs":[{"pos":"n.","def":"保修单"}]},{"id":1300,"word":"irritate","phonetic":"ˈɪrɪteɪt","segs":[{"pos":"v.","def":"使烦恼；激怒"}]},{"id":1301,"word":"slide","phonetic":"slaɪd","segs":[{"pos":"n.","def":"幻灯片"},{"pos":"v.","def":"滑动"}]},{"id":1302,"word":"resource","phonetic":"ˈriːsɔːrs","segs":[{"pos":"n.","def":"资源"}]},{"id":1303,"word":"strike","phonetic":"straɪk","segs":[{"pos":"v.","def":"打击"}]},{"id":1304,"word":"soar","phonetic":"sɔːr","segs":[{"pos":"v.","def":"高飞；激增"}]},{"id":1305,"word":"acknowledge","phonetic":"əkˈnɑːlɪdʒ","segs":[{"pos":"v.","def":"承认，感谢"}]},{"id":1306,"word":"contrary","phonetic":"ˈkɑːntreri","segs":[{"pos":"adj.","def":"相反的"},{"pos":"n.","def":"反面"}]},{"id":1307,"word":"bargain","phonetic":"ˈbɑːrɡɪn","segs":[{"pos":"v.","def":"讨价还价"},{"pos":"n.","def":"交易，便宜货"}]},{"id":1308,"word":"local","phonetic":"ˈloʊkəl","segs":[{"pos":"adj.","def":"当地的"}]},{"id":1309,"word":"disappear","phonetic":"ˌdɪsəˈpɪr","segs":[{"pos":"v.","def":"消失"}]},{"id":1310,"word":"monopoly","phonetic":"məˈnɑːpəli","segs":[{"pos":"n.","def":"垄断"}]},{"id":1311,"word":"condemn","phonetic":"kənˈdem","segs":[{"pos":"v.","def":"谴责"}]},{"id":1312,"word":"withstand","phonetic":"wɪðˈstænd","segs":[{"pos":"v.","def":"经受住"}]},{"id":1313,"word":"guideline","phonetic":"ˈɡaɪdlaɪn","segs":[{"pos":"n.","def":"指导方针"}]},{"id":1314,"word":"applaud","phonetic":"əˈplɔːd","segs":[{"pos":"v.","def":"鼓掌，称赞"}]},{"id":1315,"word":"diverse","phonetic":"daɪˈvɜːrs","segs":[{"pos":"adj.","def":"不同的；多种多样的"}]},{"id":1316,"word":"institution","phonetic":"ˌɪnstɪˈtjuːʃən","segs":[{"pos":"n.","def":"机构，建立"}]},{"id":1317,"word":"arise","phonetic":"əˈraɪz","segs":[{"pos":"v.","def":"出现，发生"}]},{"id":1318,"word":"monitor","phonetic":"ˈmɑːnɪtər","segs":[{"pos":"v.","def":"监控"},{"pos":"n.","def":"显示器"}]},{"id":1319,"word":"resemble","phonetic":"rɪˈzembəl","segs":[{"pos":"v.","def":"像...；类似"}]},{"id":1320,"word":"ditch","phonetic":"dɪtʃ","segs":[{"pos":"v.","def":"丢弃"}]},{"id":1321,"word":"commence","phonetic":"kəˈmens","segs":[{"pos":"v.","def":"着手；开始"}]},{"id":1322,"word":"offer","phonetic":"ˈɔːfər","segs":[{"pos":"v.","def":"提供"},{"pos":"n.","def":"提议"}]},{"id":1323,"word":"evidence","phonetic":"ˈevɪdəns","segs":[{"pos":"n.","def":"证据"}]},{"id":1324,"word":"predominate","phonetic":"prɪˈdɑːmɪneɪt","segs":[{"pos":"v.","def":"占主导地位"}]},{"id":1325,"word":"folk","phonetic":"foʊk","segs":[{"pos":"adj.","def":"民间的"},{"pos":"n.","def":"人们"}]},{"id":1326,"word":"hamper","phonetic":"ˈhæmpər","segs":[{"pos":"v.","def":"阻碍；阻止；束缚"}]},{"id":1327,"word":"emphasis","phonetic":"ˈemfəsɪs","segs":[{"pos":"n.","def":"强调，重视"}]},{"id":1328,"word":"planet","phonetic":"ˈplænɪt","segs":[{"pos":"n.","def":"星球"}]},{"id":1329,"word":"incredible","phonetic":"ɪnˈkredəbəl","segs":[{"pos":"adj.","def":"难以置信的"}]},{"id":1330,"word":"physics","phonetic":"ˈfɪzɪks","segs":[{"pos":"n.","def":"物理学"}]},{"id":1331,"word":"island","phonetic":"ˈaɪlənd","segs":[{"pos":"n.","def":"岛屿"}]},{"id":1332,"word":"boast","phonetic":"boʊst","segs":[{"pos":"v.","def":"吹嘘"},{"pos":"n.","def":"自夸"}]},{"id":1333,"word":"focus","phonetic":"ˈfoʊkəs","segs":[{"pos":"v./n.","def":"聚焦"}]},{"id":1334,"word":"landmark","phonetic":"ˈlændmɑːrk","segs":[{"pos":"n.","def":"里程碑；地标"}]},{"id":1335,"word":"complacent","phonetic":"kəmˈpleɪsənt","segs":[{"pos":"adj.","def":"自鸣得意的"}]},{"id":1336,"word":"nevertheless","phonetic":"ˌnevərðəˈles","segs":[{"pos":"adv.","def":"然而"}]},{"id":1337,"word":"undermine","phonetic":"ˌʌndərˈmaɪn","segs":[{"pos":"v.","def":"削弱，损害"}]},{"id":1338,"word":"impart","phonetic":"ɪmˈpɑːrt","segs":[{"pos":"v.","def":"传授"}]},{"id":1339,"word":"industry","phonetic":"ˈɪndəstri","segs":[{"pos":"n.","def":"工业，行业"}]},{"id":1340,"word":"resolve","phonetic":"rɪˈzɑːlv","segs":[{"pos":"v.","def":"解决；决定"},{"pos":"n.","def":"决心"}]},{"id":1341,"word":"persecute","phonetic":"ˈpɜːrsɪkjuːt","segs":[{"pos":"v.","def":"迫害；控告"}]},{"id":1342,"word":"document","phonetic":"ˈdɑːkjumənt","segs":[{"pos":"v.","def":"记录"},{"pos":"n.","def":"文件"}]},{"id":1343,"word":"spectacle","phonetic":"ˈspektəkəl","segs":[{"pos":"n.","def":"壮观的景象"}]},{"id":1344,"word":"elementary","phonetic":"ˌelɪˈmentəri","segs":[{"pos":"adj.","def":"基础的；初级的"}]},{"id":1345,"word":"reinforce","phonetic":"ˌriːɪnˈfɔːrs","segs":[{"pos":"v.","def":"加强；加固"}]},{"id":1346,"word":"punish","phonetic":"ˈpʌnɪʃ","segs":[{"pos":"v.","def":"惩罚"}]},{"id":1347,"word":"turnover","phonetic":"ˈtɜːrnoʊvər","segs":[{"pos":"n.","def":"营业额；流动率"}]},{"id":1348,"word":"indict","phonetic":"ɪnˈdaɪt","segs":[{"pos":"v.","def":"控告；起诉"}]},{"id":1349,"word":"invisible","phonetic":"ɪnˈvɪzəbəl","segs":[{"pos":"adj.","def":"隐形的，看不见的"}]},{"id":1350,"word":"agriculture","phonetic":"ˈæɡrɪkʌltʃər","segs":[{"pos":"n.","def":"农业"}]},{"id":1351,"word":"ahead","phonetic":"əˈhed","segs":[{"pos":"adv.","def":"提前，领先"}]},{"id":1352,"word":"withdraw","phonetic":"wɪðˈdrɔː","segs":[{"pos":"v.","def":"撤回；退出"}]},{"id":1353,"word":"formula","phonetic":"ˈfɔːrmjələ","segs":[{"pos":"n.","def":"公式；方案"}]},{"id":1354,"word":"struggle","phonetic":"ˈstrʌɡəl","segs":[{"pos":"v.","def":"努力，挣扎"}]},{"id":1355,"word":"enlist","phonetic":"ɪnˈlɪst","segs":[{"pos":"v.","def":"使入伍；征募"}]},{"id":1356,"word":"lease","phonetic":"liːs","segs":[{"pos":"v.","def":"租用"},{"pos":"n.","def":"租约"}]},{"id":1357,"word":"lure","phonetic":"lʊr","segs":[{"pos":"v.","def":"诱惑；引诱"},{"pos":"n.","def":"诱惑力"}]},{"id":1358,"word":"overhaul","phonetic":"ˈoʊvərhɔːl","segs":[{"pos":"n./v.","def":"彻底检修"}]},{"id":1359,"word":"feeble","phonetic":"ˈfiːbəl","segs":[{"pos":"adj.","def":"虚弱的；无力的"}]},{"id":1360,"word":"approach","phonetic":"əˈproʊtʃ","segs":[{"pos":"n.","def":"方法"},{"pos":"v.","def":"接近，处理"}]},{"id":1361,"word":"expand","phonetic":"ɪkˈspænd","segs":[{"pos":"v.","def":"扩大，扩展"}]},{"id":1362,"word":"trivial","phonetic":"ˈtrɪviəl","segs":[{"pos":"adj.","def":"琐碎的，微不足道的"}]},{"id":1363,"word":"immense","phonetic":"ɪˈmens","segs":[{"pos":"adj.","def":"极大的"}]},{"id":1364,"word":"transmit","phonetic":"trænzˈmɪt","segs":[{"pos":"v.","def":"传递，传播"}]},{"id":1365,"word":"aboard","phonetic":"əˈbɔːrd","segs":[{"pos":"adv./prep.","def":"上船（飞机，火车）"}]},{"id":1366,"word":"dismantle","phonetic":"dɪsˈmæntəl","segs":[{"pos":"v.","def":"拆开；拆卸"}]},{"id":1367,"word":"impact","phonetic":"ˈɪmpækt","segs":[{"pos":"n./v.","def":"影响"}]},{"id":1368,"word":"formidable","phonetic":"ˈfɔːrmɪdəbəl","segs":[{"pos":"adj.","def":"可怕的"}]},{"id":1369,"word":"intensify","phonetic":"ɪnˈtensɪfaɪ","segs":[{"pos":"v.","def":"增强"}]},{"id":1370,"word":"loom","phonetic":"luːm","segs":[{"pos":"v.","def":"迫近；令人惊恐地隐现"},{"pos":"n.","def":"织布机"}]},{"id":1371,"word":"harbor","phonetic":"ˈhɑːrbər","segs":[{"pos":"n.","def":"海港，港口"}]},{"id":1372,"word":"contrive","phonetic":"kənˈtraɪv","segs":[{"pos":"v.","def":"设法做到"}]},{"id":1373,"word":"detect","phonetic":"dɪˈtekt","segs":[{"pos":"v.","def":"发现，查明"}]},{"id":1374,"word":"endeavor","phonetic":"ɪnˈdevər","segs":[{"pos":"v.","def":"努力，尝试"},{"pos":"n.","def":"努力"}]},{"id":1375,"word":"refrain","phonetic":"rɪˈfreɪn","segs":[{"pos":"v.","def":"抑制；克制"}]},{"id":1376,"word":"ridicule","phonetic":"ˈrɪdɪkjuːl","segs":[{"pos":"v.","def":"嘲笑；奚落"}]},{"id":1377,"word":"exotic","phonetic":"ɪɡˈzɑːtɪk","segs":[{"pos":"adj.","def":"外来的，异国情调的"}]},{"id":1378,"word":"stump","phonetic":"stʌmp","segs":[{"pos":"n.","def":"树墩"},{"pos":"v.","def":"脚步重重地走"}]},{"id":1379,"word":"instance","phonetic":"ˈɪnstəns","segs":[{"pos":"n.","def":"例子"}]},{"id":1380,"word":"loophole","phonetic":"ˈluːphoʊl","segs":[{"pos":"n.","def":"(法律) 漏洞；空子"}]},{"id":1381,"word":"minimum","phonetic":"ˈmɪnɪməm","segs":[{"pos":"adj.","def":"最低的，最小的"}]},{"id":1382,"word":"momentum","phonetic":"məˈmentəm","segs":[{"pos":"n.","def":"势头，动量"}]},{"id":1383,"word":"bizarre","phonetic":"bɪˈzɑːr","segs":[{"pos":"adj.","def":"奇异的；怪异的"}]},{"id":1384,"word":"royal","phonetic":"ˈrɔɪəl","segs":[{"pos":"adj.","def":"皇家"}]},{"id":1385,"word":"second-hand","phonetic":"ˈsekənd hænd","segs":[{"pos":"adj.","def":"二手的"}]},{"id":1386,"word":"expert","phonetic":"ˈekspɜːrt","segs":[{"pos":"n.","def":"专家"},{"pos":"adj.","def":"内行的"}]},{"id":1387,"word":"tactic","phonetic":"ˈtæktɪk","segs":[{"pos":"n.","def":"策略；战术"}]},{"id":1388,"word":"dropout","phonetic":"ˈdrɑːpaʊt","segs":[{"pos":"n.","def":"辍学者"}]},{"id":1389,"word":"sacred","phonetic":"ˈseɪkrɪd","segs":[{"pos":"adj.","def":"神圣的"}]},{"id":1390,"word":"restrict","phonetic":"rɪˈstrɪkt","segs":[{"pos":"v.","def":"限制，妨碍"}]},{"id":1391,"word":"minor","phonetic":"ˈmaɪnər","segs":[{"pos":"adj.","def":"较小的"}]},{"id":1392,"word":"ancestor","phonetic":"ˈænsestər","segs":[{"pos":"n.","def":"祖先"}]},{"id":1393,"word":"conceive","phonetic":"kənˈsiːv","segs":[{"pos":"v.","def":"想象；构想；怀孕"}]},{"id":1394,"word":"concrete","phonetic":"ˈkɒŋkriːt","segs":[{"pos":"adj.","def":"具体的"},{"pos":"n.","def":"混凝土"}]},{"id":1395,"word":"compose","phonetic":"kəmˈpoʊz","segs":[{"pos":"v.","def":"组成；写"}]},{"id":1396,"word":"communication","phonetic":"kəˌmjuːnɪˈkeɪʃən","segs":[{"pos":"n.","def":"沟通，交流"}]},{"id":1397,"word":"clockwise","phonetic":"ˈklɑːkwaɪz","segs":[{"pos":"adj.","def":"顺时针方向的"}]},{"id":1398,"word":"vulnerable","phonetic":"ˈvʌlnərəbəl","segs":[{"pos":"adj.","def":"脆弱的，易受伤的"}]},{"id":1399,"word":"reluctant","phonetic":"rɪˈlʌktənt","segs":[{"pos":"adj.","def":"不情愿的，勉强的"}]},{"id":1400,"word":"vertical","phonetic":"ˈvɜːrtɪkəl","segs":[{"pos":"adj.","def":"垂直的；纵向的"}]},{"id":1401,"word":"coastal","phonetic":"ˈkoʊstəl","segs":[{"pos":"adj.","def":"海岸的"}]},{"id":1402,"word":"relentless","phonetic":"rɪˈlentləs","segs":[{"pos":"adj.","def":"不懈的；无情的"}]},{"id":1403,"word":"ideology","phonetic":"ˌaɪdiˈɑːlədʒi","segs":[{"pos":"n.","def":"意识形态，思想体系"}]},{"id":1404,"word":"ensure","phonetic":"ɪnˈʃʊr","segs":[{"pos":"v.","def":"确保"}]},{"id":1405,"word":"automobile","phonetic":"ˈɔːtəməbiːl","segs":[{"pos":"n.","def":"汽车"}]},{"id":1406,"word":"delight","phonetic":"dɪˈlaɪt","segs":[{"pos":"v.","def":"使高兴"},{"pos":"n.","def":"高兴"}]},{"id":1407,"word":"satisfaction","phonetic":"ˌsætɪsˈfækʃən","segs":[{"pos":"n.","def":"满意"}]},{"id":1408,"word":"expectation","phonetic":"ˌekspekˈteɪʃən","segs":[{"pos":"n.","def":"期望"}]},{"id":1409,"word":"adventure","phonetic":"ədˈventʃər","segs":[{"pos":"n.","def":"冒险"}]},{"id":1410,"word":"lazy","phonetic":"ˈleɪzi","segs":[{"pos":"adj.","def":"懒惰的"}]},{"id":1411,"word":"sincere","phonetic":"sɪnˈsɪr","segs":[{"pos":"adj.","def":"真诚的，诚实的"}]},{"id":1412,"word":"context","phonetic":"ˈkɑːntekst","segs":[{"pos":"n.","def":"上下文，背景"}]},{"id":1413,"word":"allege","phonetic":"əˈledʒ","segs":[{"pos":"v.","def":"断言；声称"}]},{"id":1414,"word":"vital","phonetic":"ˈvaɪtəl","segs":[{"pos":"adj.","def":"至关重要的"}]},{"id":1415,"word":"loop","phonetic":"luːp","segs":[{"pos":"n.","def":"圈；循环"},{"pos":"v.","def":"使成环"}]},{"id":1416,"word":"enhance","phonetic":"ɪnˈhæns","segs":[{"pos":"v.","def":"提高，增强"}]},{"id":1417,"word":"seize","phonetic":"siːz","segs":[{"pos":"v.","def":"抓住；夺取"}]},{"id":1418,"word":"aggressive","phonetic":"əˈɡresɪv","segs":[{"pos":"adj.","def":"侵略的；有进取心的"}]},{"id":1419,"word":"dissertation","phonetic":"ˌdɪsərˈteɪʃən","segs":[{"pos":"n.","def":"专业论文"}]},{"id":1420,"word":"surveillance","phonetic":"sərˈveɪləns","segs":[{"pos":"n.","def":"监视"}]},{"id":1421,"word":"headline","phonetic":"ˈhedlaɪn","segs":[{"pos":"n.","def":"标题；大字标题"}]},{"id":1422,"word":"stare","phonetic":"ster","segs":[{"pos":"v.","def":"凝视，盯"}]},{"id":1423,"word":"signal","phonetic":"ˈsɪɡnəl","segs":[{"pos":"n.","def":"信号"},{"pos":"v.","def":"预示"}]},{"id":1424,"word":"liberate","phonetic":"ˈlɪbəreɪt","segs":[{"pos":"v.","def":"释放；解放"}]},{"id":1425,"word":"internal","phonetic":"ɪnˈtɜːrnəl","segs":[{"pos":"adj.","def":"内部的"}]},{"id":1426,"word":"communicate","phonetic":"kəˈmjuːnɪkeɪt","segs":[{"pos":"v.","def":"沟通"}]},{"id":1427,"word":"consistent","phonetic":"kənˈsɪstənt","segs":[{"pos":"adj.","def":"一致的，持续的"}]},{"id":1428,"word":"ensure","phonetic":"ɪnˈʃʊr","segs":[{"pos":"v.","def":"确保，保证"}]},{"id":1429,"word":"hide","phonetic":"haɪd","segs":[{"pos":"v.","def":"隐藏"}]},{"id":1430,"word":"refute","phonetic":"rɪˈfjuːt","segs":[{"pos":"v.","def":"驳斥，反驳"}]},{"id":1431,"word":"overcome","phonetic":"ˌoʊvərˈkʌm","segs":[{"pos":"v.","def":"克服，解决"}]},{"id":1432,"word":"remnant","phonetic":"ˈremnənt","segs":[{"pos":"n.","def":"残余部分，剩余部分"}]},{"id":1433,"word":"dominate","phonetic":"ˈdɑːmɪneɪt","segs":[{"pos":"v.","def":"支配，占主导"}]},{"id":1434,"word":"damage","phonetic":"ˈdæmɪdʒ","segs":[{"pos":"n.","def":"伤害"},{"pos":"v.","def":"损害"}]},{"id":1435,"word":"deficient","phonetic":"dɪˈfɪʃənt","segs":[{"pos":"adj.","def":"缺乏的；不足的"}]},{"id":1436,"word":"renovate","phonetic":"ˈrenəveɪt","segs":[{"pos":"v.","def":"翻新，修复"}]},{"id":1437,"word":"stock","phonetic":"stɑːk","segs":[{"pos":"n.","def":"股票，库存"},{"pos":"v.","def":"储存"}]},{"id":1438,"word":"ladder","phonetic":"ˈlædər","segs":[{"pos":"n.","def":"梯子"}]}]}</script>
+<script>
+(function () {
+  'use strict';
+
+  var DATA;
+  try {
+    DATA = JSON.parse(document.getElementById('app-data').textContent);
+  } catch (e) {
+    document.body.innerHTML = '<p style="padding:24px;font:16px/1.6 -apple-system,sans-serif">这是模板文件，请先运行 build_app.py 生成正式 HTML。</p>';
+    return;
+  }
+  var WORDS = DATA.words;
+  var TOTAL = WORDS.length;
+  var byId = {};
+  WORDS.forEach(function (w) { byId[w.id] = w; });
+
+  var GROUP = 50;                 // 每 50 词一页
+  var PAGES = Math.ceil(TOTAL / GROUP);
+  var ROW_H = 46, SEP_H = 34;     // 行高 / 页分隔带高度（与 CSS 保持一致）
+
+  /* ================= 存储 ================= */
+  var LS_CLICKS = 'kaoyan1500.clicks.v1';
+  var LS_AUTO = 'kaoyan1500.autospeak.v1';
+  var LS_DEFSHOW = 'kaoyan1500.defaultshow.v1';
+  var LS_COUNTS = 'kaoyan1500.showcounts.v1';
+  var memClicks = null;
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  var lsOK = (function () {
+    if (!lsSet('__t', '1')) return false;
+    try { localStorage.removeItem('__t'); } catch (e) {}
+    return true;
+  })();
+  var showCounts = lsGet(LS_COUNTS) === '1';
+
+  var clicks = {};
+  (function () {
+    var s = lsGet(LS_CLICKS);
+    if (s) { try { clicks = JSON.parse(s) || {}; } catch (e) { clicks = {}; } }
+    memClicks = clicks;
+  })();
+  function persist() {
+    lsSet(LS_CLICKS, JSON.stringify(clicks));
+    memClicks = clicks;
+  }
+
+  /* ================= 工具 ================= */
+  function fmtDate(ts) {
+    if (!ts) return '';
+    var d = new Date(ts), n = new Date();
+    if (d.toDateString() === n.toDateString()) return '今天';
+    var y = new Date(n.getTime() - 86400000);
+    if (d.toDateString() === y.toDateString()) return '昨天';
+    return (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function stamp() {
+    var d = new Date(), p = function (x) { return (x < 10 ? '0' : '') + x; };
+    return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+  }
+  var toastEl = document.getElementById('toast');
+  var toastTimer = 0;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 1700);
+  }
+
+  /* ================= 表格 ================= */
+  var listEl = document.getElementById('list');
+  var tblEl = document.getElementById('tbl');
+  var subEl = document.getElementById('sub');
+  var rowRefs = {};
+  var frag = document.createDocumentFragment();
+  var speakSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.8 8.7a4.4 4.4 0 010 6.6M18.4 6a7.8 7.8 0 010 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+
+  function makePageSep(unitNo) {
+    var sep = document.createElement('div');
+    sep.className = 'page-sep';
+    var s = document.createElement('span');
+    s.textContent = 'Unit ' + unitNo;
+    sep.appendChild(s);
+    return sep;
+  }
+  var unitBody = null;
+  WORDS.forEach(function (w, i) {
+    if (i % GROUP === 0) {
+      frag.appendChild(makePageSep(i / GROUP + 1));
+      unitBody = document.createElement('div');
+      unitBody.className = 'unit-body';
+      frag.appendChild(unitBody);
+    }
+    var row = document.createElement('div');
+    row.className = 'row' + (i % 2 ? ' alt' : '');
+    row.dataset.id = w.id;
+
+    // 左列：单词 + 点击角标
+    var cw = document.createElement('div');
+    cw.className = 'cell-w';
+    var t = document.createElement('span');
+    t.className = 'w';
+    t.textContent = w.word;
+    var b = document.createElement('span');
+    b.className = 'badge';
+    cw.appendChild(t);
+    cw.appendChild(b);
+
+    // 右列：音标 + 发音按钮 + 释义（默认隐藏，随展开填充）
+    var cd = document.createElement('div');
+    cd.className = 'cell-d';
+    row.appendChild(cw);
+    row.appendChild(cd);
+    unitBody.appendChild(row);
+    rowRefs[w.id] = { row: row, badge: b, cellW: cw, cellD: cd, filled: false };
+  });
+  tblEl.appendChild(frag);
+
+  function refreshBadge(id) {
+    var ref = rowRefs[id];
+    if (!ref) return;
+    var rec = clicks[id];
+    if (rec && rec.c > 0) {
+      ref.badge.textContent = '×' + rec.c;
+    } else {
+      ref.badge.textContent = '';
+      ref.badge.className = 'badge';
+    }
+  }
+  function refreshAllBadges() { for (var k in rowRefs) refreshBadge(k); }
+
+  function computeStats() {
+    var seen = 0, tc = 0;
+    for (var k in clicks) {
+      var c = (clicks[k] && clicks[k].c) || 0;
+      if (c > 0) { seen++; tc += c; }
+    }
+    return { seen: seen, total: tc };
+  }
+  function updateSub() {
+    var base = '共 ' + TOTAL + ' 词 · ' + PAGES + ' 个 Unit';
+    if (!showCounts) { subEl.textContent = base; return; }
+    var s = computeStats();
+    subEl.textContent = base + ' · 已查 ' + s.seen + ' · 点击 ' + s.total;
+  }
+
+  /* ================= 发音 ================= */
+  var voices = [];
+  function pickVoice() {
+    try { if (!voices.length) voices = window.speechSynthesis.getVoices() || []; } catch (e) { voices = []; }
+    var i, v;
+    for (i = 0; i < voices.length; i++) {
+      v = voices[i];
+      if (/^en[-_](US|GB)/i.test(v.lang) && /Samantha|Alex|Ava|Daniel|Karen|Moira|Google/i.test(v.name)) return v;
+    }
+    for (i = 0; i < voices.length; i++) { v = voices[i]; if (/^en[-_]US/i.test(v.lang)) return v; }
+    for (i = 0; i < voices.length; i++) { v = voices[i]; if (/^en/i.test(v.lang)) return v; }
+    return null;
+  }
+  function speak(text) {
+    if (!('speechSynthesis' in window)) { toast('当前环境不支持朗读'); return; }
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1; u.volume = 1;
+      var v = pickVoice();
+      if (v) u.voice = v;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  if ('speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = function () {
+        try { voices = window.speechSynthesis.getVoices() || []; } catch (e) {}
+      };
+    } catch (e) {}
+  }
+  var LS_AUTO_VAL = lsGet(LS_AUTO) === '1';
+  var autoSpeak = LS_AUTO_VAL;
+  var chkAuto = document.getElementById('chk-auto');
+  chkAuto.checked = autoSpeak;
+  chkAuto.addEventListener('change', function () {
+    autoSpeak = chkAuto.checked;
+    lsSet(LS_AUTO, autoSpeak ? '1' : '0');
+  });
+
+  /* ================= 行内展开 / 收起（支持多个单词同时展开） ================= */
+  function fillDetail(ref, w) {
+    if (ref.filled) return;
+    var cd = ref.cellD;
+
+    // 左：音标 + 释义（单行流式，超出省略，保证行高不变）
+    var flow = document.createElement('div');
+    flow.className = 'd-flow';
+    var ph = document.createElement('span');
+    ph.className = 'd-phon';
+    ph.textContent = '[' + w.phonetic + ']';
+    flow.appendChild(ph);
+
+    var defs = document.createElement('div');
+    defs.className = 'd-defs';
+    w.segs.forEach(function (s) {
+      var line = document.createElement('div');
+      line.className = 'def-line';
+      if (s.pos) {
+        var p = document.createElement('span');
+        p.className = 'pos';
+        p.textContent = s.pos;
+        line.appendChild(p);
+      }
+      var d = document.createElement('span');
+      d.className = 'def';
+      d.textContent = s.def;
+      line.appendChild(d);
+      defs.appendChild(line);
+    });
+    flow.appendChild(defs);
+
+    // 右：发音按钮 + 计数
+    var sp = document.createElement('button');
+    sp.className = 'speak';
+    sp.type = 'button';
+    sp.setAttribute('aria-label', '朗读');
+    sp.innerHTML = speakSvg;
+    sp.addEventListener('click', function (e) {
+      e.stopPropagation();   // 发音按钮不触发行折叠
+      speak(w.word);
+    });
+
+    var meta = document.createElement('div');
+    meta.className = 'd-meta';
+    ref.meta = meta;
+
+    cd.appendChild(flow);
+    cd.appendChild(sp);
+    cd.appendChild(meta);
+    ref.filled = true;
+  }
+
+  function updateMeta(ref, id) {
+    if (!ref.meta) return;
+    if (!showCounts) { ref.meta.textContent = ''; return; }
+    var r = clicks[id] || { c: 0, t: 0 };
+    ref.meta.textContent = r.t ? ('点击 ' + r.c + ' 次 · ' + fmtDate(r.t)) : '';
+  }
+
+  function countClick(id) {
+    var rec = clicks[id];
+    if (!rec) { rec = clicks[id] = { c: 0, t: 0 }; }
+    rec.c += 1;
+    rec.t = Date.now();
+    persist();
+    refreshBadge(id);
+    updateSub();
+    var ref = rowRefs[id];
+    if (ref) updateMeta(ref, id);
+  }
+
+  function expand(id, opts) {
+    opts = opts || {};
+    var w = byId[id];
+    var ref = rowRefs[id];
+    if (!w || !ref) return;
+
+    if (opts.count !== false) countClick(id);
+
+    fillDetail(ref, w);
+    updateMeta(ref, id);
+    ref.row.classList.add('open');
+
+    if (!opts.silent && autoSpeak) speak(w.word);
+  }
+
+  function collapseRow(id) {
+    var ref = rowRefs[id];
+    if (!ref) return;
+    ref.row.classList.remove('open');
+  }
+
+  function collapseAll() {
+    var opened = document.querySelectorAll('.row.open');
+    for (var i = 0; i < opened.length; i++) opened[i].classList.remove('open');
+    var hidden = document.querySelectorAll('.row.dhide');
+    for (var j = 0; j < hidden.length; j++) hidden[j].classList.remove('dhide');
+  }
+
+  /* ================= 默认显示 / 隐藏释义（顶栏开关） ================= */
+  var defaultShow = lsGet(LS_DEFSHOW) === '1';
+  var btnDefShow = document.getElementById('btn-defshow');
+  var SVG_EYE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var SVG_EYE_OFF = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  function applyDefShowBtn() {
+    btnDefShow.classList.toggle('on', defaultShow);
+    btnDefShow.innerHTML = defaultShow ? SVG_EYE : SVG_EYE_OFF;
+    btnDefShow.setAttribute('aria-label',
+      defaultShow ? '释义默认显示；点击收起全部' : '释义默认隐藏；点击展开全部');
+  }
+
+  /* 仅填充可视范围内的行（惰性渲染；坐标含每 50 词一个的 Unit 留白） */
+  var AVG = ROW_H + SEP_H / GROUP;
+  function rowTop(i) { return SEP_H * (Math.floor(i / GROUP) + 1) + ROW_H * i; }
+  function rowIndexAt(y) {
+    if (y <= SEP_H) return 0;
+    var i = Math.floor((y - SEP_H) / AVG);
+    if (i < 0) i = 0;
+    if (i > TOTAL - 1) i = TOTAL - 1;
+    while (i > 0 && rowTop(i) > y) i--;
+    while (i < TOTAL - 1 && rowTop(i + 1) <= y) i++;
+    return i;
+  }
+  function fillVisible() {
+    if (!defaultShow) return;
+    var tr = tblEl.getBoundingClientRect();
+    var yTop = -tr.top;
+    var first = rowIndexAt(yTop) - 6;
+    var last = rowIndexAt(yTop + window.innerHeight) + 6;
+    if (first < 0) first = 0;
+    if (last > WORDS.length - 1) last = WORDS.length - 1;
+    for (var i = first; i <= last; i++) {
+      var w = WORDS[i];
+      var ref = rowRefs[w.id];
+      if (ref && !ref.filled) {
+        fillDetail(ref, w);
+        updateMeta(ref, w.id);
+      }
+    }
+  }
+
+  var visPending = false;
+  function onScrollVis() {
+    if (visPending || !defaultShow) return;
+    visPending = true;
+    requestAnimationFrame(function () { visPending = false; fillVisible(); });
+  }
+  window.addEventListener('scroll', onScrollVis, { passive: true });
+  window.addEventListener('resize', onScrollVis, { passive: true });
+
+  function setDefaultShow(on) {
+    defaultShow = on;
+    lsSet(LS_DEFSHOW, on ? '1' : '0');
+    document.body.classList.toggle('defshow', on);
+    applyDefShowBtn();
+    if (on) {
+      fillVisible();
+      toast('已显示全部释义 · 点单词可临时隐藏自测');
+    } else {
+      collapseAll();
+      toast('已切换为点击查看释义');
+    }
+  }
+
+  btnDefShow.addEventListener('click', function () { setDefaultShow(!defaultShow); });
+
+  /* ================= 点击次数显示开关（顶栏） ================= */
+  var btnCounts = document.getElementById('btn-counts');
+  function applyCountsBtn() {
+    btnCounts.classList.toggle('on', showCounts);
+    btnCounts.setAttribute('aria-label', showCounts ? '隐藏点击次数' : '显示点击次数');
+  }
+  function setShowCounts(on) {
+    showCounts = on;
+    lsSet(LS_COUNTS, on ? '1' : '0');
+    document.body.classList.toggle('showcounts', on);
+    applyCountsBtn();
+    refreshAllBadges();
+    updateSub();
+    for (var k in rowRefs) { if (rowRefs[k].filled) updateMeta(rowRefs[k], Number(k)); }
+    toast(on ? '已显示点击次数' : '已隐藏点击次数');
+  }
+  btnCounts.addEventListener('click', function () { setShowCounts(!showCounts); });
+
+  listEl.addEventListener('click', function (e) {
+    var row = e.target.closest('.row');
+    if (!row) return;
+    var id = Number(row.dataset.id);
+    if (defaultShow) {
+      /* 默认显示模式下：点词隐藏自测，再点显示并计一次点击 */
+      var ref = rowRefs[id];
+      if (ref && !ref.filled) { fillDetail(ref, byId[id]); updateMeta(ref, id); }
+      if (row.classList.contains('dhide')) {
+        row.classList.remove('dhide');
+        countClick(id);
+        if (autoSpeak) speak(byId[id].word);
+      } else {
+        row.classList.add('dhide');
+      }
+      return;
+    }
+    if (row.classList.contains('open')) collapseRow(id);
+    else expand(id);
+  });
+
+  /* ================= 统计面板 ================= */
+  var sheet = document.getElementById('sheet');
+  var sheetScrim = document.getElementById('sheet-scrim');
+  var cardsEl = document.getElementById('s-cards');
+  var capEl = document.getElementById('s-cap');
+  var chipsEl = document.getElementById('chips');
+  var rankEl = document.getElementById('rank');
+  var sheetOpen = false;
+  var filter = 'seen';
+  var CAP = {
+    seen: '按点击次数排序；点击越多说明越不熟，可直接点词条打开。',
+    unseen: '还没点过的单词，点词条开始学习。',
+    ge2: '点击 ≥2 次的单词。',
+    ge3: '点击 ≥3 次的单词，重点复习。'
+  };
+  var TIME_LABEL = { all: '全部时间', today: '今天', '7d': '近 7 天', '30d': '近 30 天' };
+  var timeFilter = 'all';
+  var chipsTimeEl = document.getElementById('chips-time');
+
+  /* 时间过滤：依据最近一次点击时间 */
+  function inTimeRange(rec) {
+    if (timeFilter === 'all') return true;
+    var t = (rec && rec.t) || 0;
+    if (!t) return false;
+    if (timeFilter === 'today') {
+      var d = new Date(t), n = new Date();
+      return d.toDateString() === n.toDateString();
+    }
+    if (timeFilter === '7d') return Date.now() - t <= 7 * 86400000;
+    if (timeFilter === '30d') return Date.now() - t <= 30 * 86400000;
+    return true;
+  }
+  /* 概览卡：开启时间筛选时只统计范围内单词（次数为词累计点击） */
+  function computeStatsRange() {
+    if (timeFilter === 'all') return computeStats();
+    var seen = 0, tc = 0;
+    for (var k in clicks) {
+      var r = clicks[k];
+      if (!r || !r.c) continue;
+      if (!inTimeRange(r)) continue;
+      seen++; tc += r.c;
+    }
+    return { seen: seen, total: tc };
+  }
+
+  function renderSummary() {
+    var s = computeStatsRange();
+    var pct = TOTAL ? s.seen / TOTAL * 100 : 0;
+    var pctStr = pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct > 0 ? pct.toFixed(2) : '0';
+    cardsEl.innerHTML =
+      '<div class="s-card"><div class="s-num">' + s.seen + '</div><div class="s-lab">已查单词</div></div>' +
+      '<div class="s-card"><div class="s-num">' + s.total + '</div><div class="s-lab">总点击</div></div>' +
+      '<div class="s-card"><div class="s-num">' + pctStr + '%</div><div class="s-lab">覆盖率</div></div>';
+  }
+
+  function renderRank() {
+    capEl.textContent = (CAP[filter] || '') +
+      (timeFilter !== 'all' ? '（时间筛选：' + TIME_LABEL[timeFilter] + '；依据最近一次点击）' : '');
+    var arr = WORDS.filter(function (w) {
+      var rec = clicks[w.id];
+      var c = (rec && rec.c) || 0;
+      if (filter === 'unseen') return c === 0;
+      if (filter === 'seen' && c <= 0) return false;
+      if (filter === 'ge2' && c < 2) return false;
+      if (filter === 'ge3' && c < 3) return false;
+      return inTimeRange(rec);
+    });
+    if (filter === 'seen' || filter === 'ge2' || filter === 'ge3') {
+      arr.sort(function (a, b) {
+        var ca = clicks[a.id] || { c: 0, t: 0 }, cb = clicks[b.id] || { c: 0, t: 0 };
+        return cb.c - ca.c || cb.t - ca.t || a.id - b.id;
+      });
+    }
+    rankEl.innerHTML = '';
+    if (!arr.length) {
+      var empty = document.createElement('div');
+      empty.className = 'r-empty';
+      empty.textContent = (timeFilter !== 'all' && filter !== 'unseen')
+        ? '该时间范围内没有符合条件的记录'
+        : (filter === 'seen' ? '还没有点击记录，去列表里点几个单词吧' : '没有符合条件的单词');
+      rankEl.appendChild(empty);
+      return;
+    }
+    var f = document.createDocumentFragment();
+    arr.forEach(function (w, i) {
+      var rec = clicks[w.id] || { c: 0, t: 0 };
+      var row = document.createElement('div');
+      row.className = 'r-row';
+      row.dataset.id = w.id;
+      var idx = document.createElement('span');
+      idx.className = 'r-idx';
+      idx.textContent = (filter === 'seen' || filter === 'ge2' || filter === 'ge3') ? String(i + 1) : '';
+      var wd = document.createElement('span');
+      wd.className = 'r-w';
+      wd.textContent = w.word;
+      var cEl = document.createElement('span');
+      cEl.className = 'r-c';
+      cEl.textContent = rec.c > 0 ? '×' + rec.c : '';
+      var tEl = document.createElement('span');
+      tEl.className = 'r-t';
+      tEl.textContent = rec.c > 0 ? fmtDate(rec.t) : '';
+      row.appendChild(idx); row.appendChild(wd); row.appendChild(cEl); row.appendChild(tEl);
+      f.appendChild(row);
+    });
+    rankEl.appendChild(f);
+  }
+
+  function openSheet() {
+    renderSummary();
+    renderRank();
+    document.body.classList.add('sheet-open');
+    sheet.setAttribute('aria-hidden', 'false');
+    sheetOpen = true;
+  }
+  function closeSheet() {
+    document.body.classList.remove('sheet-open');
+    sheet.setAttribute('aria-hidden', 'true');
+    sheetOpen = false;
+  }
+
+  document.getElementById('btn-stats').addEventListener('click', openSheet);
+  document.getElementById('sheet-done').addEventListener('click', closeSheet);
+  sheetScrim.addEventListener('click', closeSheet);
+  chipsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('.chip');
+    if (!b) return;
+    filter = b.dataset.f;
+    for (var i = 0; i < chipsEl.children.length; i++) {
+      chipsEl.children[i].classList.toggle('on', chipsEl.children[i] === b);
+    }
+    renderRank();
+  });
+  chipsTimeEl.addEventListener('click', function (e) {
+    var b = e.target.closest('.chip');
+    if (!b) return;
+    timeFilter = b.dataset.t;
+    for (var i = 0; i < chipsTimeEl.children.length; i++) {
+      chipsTimeEl.children[i].classList.toggle('on', chipsTimeEl.children[i] === b);
+    }
+    renderSummary();
+    renderRank();
+  });
+  rankEl.addEventListener('click', function (e) {
+    var row = e.target.closest('.r-row');
+    if (!row) return;
+    var id = Number(row.dataset.id);
+    closeSheet();
+    rowRefs[id].row.scrollIntoView({ block: 'center' });
+    expand(id);
+  });
+
+  /* ================= 导入 / 导出 ================= */
+  var io = document.getElementById('io');
+  var ioTitle = document.getElementById('io-title');
+  var ioHint = document.getElementById('io-hint');
+  var ioText = document.getElementById('io-text');
+  var ioBtns = document.getElementById('io-btns');
+  var ioOpen = false;
+  io.addEventListener('click', function (e) { if (e.target === io && ioOpen) closeIO(); });
+
+  function openIO(title, hint, text, buttons) {
+    ioTitle.textContent = title;
+    ioHint.textContent = hint;
+    ioText.value = text;
+    ioBtns.innerHTML = '';
+    buttons.forEach(function (b) {
+      var el = document.createElement('button');
+      el.className = 's-btn' + (b.primary ? ' primary' : '');
+      el.textContent = b.t;
+      el.addEventListener('click', b.fn);
+      ioBtns.appendChild(el);
+    });
+    document.body.classList.add('io-open');
+    ioOpen = true;
+  }
+  function closeIO() {
+    document.body.classList.remove('io-open');
+    ioOpen = false;
+  }
+
+  function copyText(text, done) {
+    function fallback() {
+      var ok = false;
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        ok = document.execCommand('copy');
+        ta.remove();
+      } catch (e) { ok = false; }
+      done(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } else fallback();
+  }
+  function download(name, text) {
+    try {
+      var blob = new Blob([text], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+      return true;
+    } catch (e) { return false; }
+  }
+  function mergeClicks(obj) {
+    var src = (obj && obj.clicks && typeof obj.clicks === 'object') ? obj.clicks : obj;
+    if (!src || typeof src !== 'object') return -1;
+    var n = 0;
+    for (var k in src) {
+      if (!/^\d{1,5}$/.test(k)) continue;
+      var r = src[k];
+      if (!r || typeof r !== 'object') continue;
+      var c = Math.floor(Number(r.c));
+      if (!isFinite(c) || c <= 0) continue;
+      var t = Number(r.t) || 0;
+      var cur = clicks[k];
+      if (!cur) cur = clicks[k] = { c: 0, t: 0 };
+      cur.c += c;
+      if (t > cur.t) cur.t = t;
+      n++;
+    }
+    if (n) { persist(); refreshAllBadges(); updateSub(); }
+    return n;
+  }
+
+  document.getElementById('btn-export').addEventListener('click', function () {
+    var payload = { app: 'kaoyan1500', version: 1, exportedAt: new Date().toISOString(), clicks: clicks };
+    var text = JSON.stringify(payload, null, 1);
+    openIO('导出数据',
+      '数据只保存在本机浏览器。换设备或清理浏览器数据前建议先导出；把 JSON 传到新设备后用「导入数据」合并即可。',
+      text,
+      [
+        { t: '复制', fn: function () { copyText(text, function (ok) { toast(ok ? '已复制到剪贴板' : '复制失败，请手动选择复制'); }); } },
+        { t: '下载 .json', fn: function () { toast(download('clicks_' + stamp() + '.json', text) ? '已开始下载' : '下载不可用，请手动复制'); } },
+        { t: '完成', primary: true, fn: closeIO }
+      ]);
+  });
+  document.getElementById('btn-import').addEventListener('click', function () {
+    openIO('导入数据',
+      '粘贴此前导出的 JSON 内容后点「合并导入」。注意：同一份数据重复导入会重复累加次数。',
+      '',
+      [
+        { t: '取消', fn: closeIO },
+        {
+          t: '合并导入', primary: true, fn: function () {
+            var txt = ioText.value.trim();
+            if (!txt) { toast('请先粘贴 JSON 内容'); return; }
+            var obj;
+            try { obj = JSON.parse(txt); } catch (e) { toast('JSON 解析失败'); return; }
+            var n = mergeClicks(obj);
+            if (n < 0) { toast('数据格式不正确'); return; }
+            closeIO();
+            toast('已合并 ' + n + ' 个词条');
+            if (sheetOpen) { renderSummary(); renderRank(); }
+          }
+        }
+      ]);
+  });
+  document.getElementById('btn-clear').addEventListener('click', function () {
+    if (!confirm('确定清空所有点击记录？此操作不可撤销（建议先导出备份）。')) return;
+    clicks = {};
+    persist();
+    refreshAllBadges();
+    updateSub();
+    renderSummary();
+    renderRank();
+    toast('已清空');
+  });
+
+  /* ================= 其它 ================= */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (ioOpen) closeIO();
+    else if (sheetOpen) closeSheet();
+    else collapseAll();
+  });
+
+  var banner = document.getElementById('banner');
+  var LS_TIP = 'kaoyan1500.homescreen-tip.v1';
+  banner.addEventListener('click', function () {
+    banner.hidden = true;
+    if (banner.dataset.kind === 'tip') lsSet(LS_TIP, '1');
+  });
+
+  refreshAllBadges();
+  updateSub();
+  applyDefShowBtn();
+  applyCountsBtn();
+  if (showCounts) document.body.classList.add('showcounts');
+  if (defaultShow) {
+    document.body.classList.add('defshow');
+    requestAnimationFrame(function () { fillVisible(); });
+  }
+
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isSafari = /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  var standalone = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+
+  if (!lsOK) {
+    banner.textContent = '当前打开方式无法保存点击记录（例如「文件」预览）。建议通过 Safari 打开本页，或用统计面板中的「导出数据」备份。';
+    banner.dataset.kind = 'warn';
+    banner.hidden = false;
+  } else if (isIOS && isSafari && !standalone && lsGet(LS_TIP) !== '1') {
+    banner.textContent = '💡 点「分享 → 添加到主屏幕」，即可全屏离线使用、记录长期保留。点此关闭提示。';
+    banner.dataset.kind = 'tip';
+    banner.hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
