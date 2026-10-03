@@ -1,5 +1,5 @@
 /* 1500词 · Service Worker（缓存优先） */
-const CACHE = 'kaoyan1500-41314844ffa0';
+const CACHE = 'kaoyan1500-042220dc4e34';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function (e) {
