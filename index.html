@@ -197,9 +197,11 @@ body.defshow .row .cell-d{display:flex}
 /* 两侧显隐（点击独立切换；均保留列宽；读音按钮常显、不参与切换）：
    · .whide = 隐藏左侧单词
    · .rhide = 隐藏右侧（音标+词性+翻译）
-   三态模式 = 给所有行批量设置这两个类（left→rhide；right→whide；both→无） */
-.row.whide .cell-w .w{visibility:hidden}
-.row.rhide .d-flow{visibility:hidden}
+   三态模式 = 给所有行批量设置这两个类（left→rhide；right→whide；both→无）
+   注：用 opacity 而非 visibility —— iPad Safari 上 visibility 切换偶发不重绘
+   （需切屏回来才显示），opacity 为合成属性，配合 applyModeToRows 的强制 reflow 稳定刷新 */
+.row.whide .cell-w .w{opacity:0}
+.row.rhide .d-flow{opacity:0}
 /* 左列右侧分隔线（单词|释义 之间）：与行间线同色，加强表格感 */
 .cell-w{
   display:flex;align-items:center;gap:8px;padding:0 12px;min-width:0;
@@ -312,6 +314,7 @@ body.fav-open #fav-view{display:flex}
   backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--sep);
 }
 #fav-view .fv-head h2{margin:0;font-size:17px;font-weight:700}
+#fav-view .fv-actions{display:flex;align-items:center;gap:12px}
 .fv-body{
   flex:1 1 auto;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:0 clamp(36px,8vw,112px) calc(40px + env(safe-area-inset-bottom));
@@ -478,7 +481,10 @@ body.io-open #io{display:flex}
 <div id="fav-view" aria-hidden="true">
   <div class="fv-head">
     <h2 id="fv-title">⭐ 收藏的单词</h2>
-    <button class="s-done" id="fv-close">完成</button>
+    <div class="fv-actions">
+      <button id="fv-defshow" class="icon-btn on" aria-label="显示模式（点按切换）" title="切换显示模式（左侧单词 / 右侧释义 / 两侧一起）"></button>
+      <button class="s-done" id="fv-close">完成</button>
+    </div>
   </div>
   <div class="fv-body" id="fv-body"></div>
 </div>
@@ -849,6 +855,7 @@ body.io-open #io{display:flex}
                 (DEFMODE_KEY === 'en' ? 'left' : DEFMODE_KEY === 'zh' ? 'right' :
                  (lsGet(LS_DEFSHOW) === '1' ? 'both' : 'left'));   /* 默认：仅左侧（英文单词） */
   var btnDefShow = document.getElementById('btn-defshow');
+  var fvDefShow = document.getElementById('fv-defshow');   // 收藏视图内的同款三态按钮
   /* 图标：用「左块/右块」直观表达哪一侧显示 */
   var SVG_LEFT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg>';
   var SVG_RIGHT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/></svg>';
@@ -862,6 +869,11 @@ body.io-open #io{display:flex}
     btnDefShow.classList.toggle('on', true);
     btnDefShow.setAttribute('aria-label',
       '显示模式：' + DEFMODE_LABEL[defmode] + '（点按切换）');
+    if (fvDefShow) {
+      fvDefShow.innerHTML = icon;
+      fvDefShow.setAttribute('aria-label',
+        '显示模式：' + DEFMODE_LABEL[defmode] + '（点按切换）');
+    }
     document.body.classList.toggle('defshow', true);
     document.body.classList.toggle('defmode-en', defmode === 'left');
     document.body.classList.toggle('defmode-zh', defmode === 'right');
@@ -906,15 +918,17 @@ body.io-open #io{display:flex}
   window.addEventListener('scroll', onScrollVis, { passive: true });
   window.addEventListener('resize', onScrollVis, { passive: true });
 
-  /* 将当前模式的默认显隐状态批量应用到所有行（同时清除用户的临时切换） */
+  /* 将当前模式的默认显隐状态批量应用到所有行（主表 + 收藏视图；同时清除用户的临时切换） */
   function applyModeToRows() {
-    var rows = tblEl.querySelectorAll('.row');
+    var rows = document.querySelectorAll('.row');
     var defHide = defmode === 'left' ? 'rhide' : defmode === 'right' ? 'whide' : '';
     for (var i = 0; i < rows.length; i++) {
       rows[i].classList.remove('whide');
       rows[i].classList.remove('rhide');
       if (defHide) rows[i].classList.add(defHide);
     }
+    /* 强制样式刷新：iPad Safari 偶发批量切换后不重绘（需切屏才显示） */
+    void tblEl.offsetHeight;
   }
 
   function setDefaultShow(mode) {
@@ -928,11 +942,13 @@ body.io-open #io{display:flex}
     fillVisible();
   }
 
-  btnDefShow.addEventListener('click', function () {
+  function cycleDefMode() {
     var order = ['left', 'right', 'both'];
     var next = order[(order.indexOf(defmode) + 1) % order.length];
     setDefaultShow(next);
-  });
+  }
+  btnDefShow.addEventListener('click', cycleDefMode);
+  if (fvDefShow) fvDefShow.addEventListener('click', cycleDefMode);
 
   /* ================= 点击次数显示开关（顶栏） ================= */
   var btnCounts = document.getElementById('btn-counts');
@@ -1135,11 +1151,13 @@ body.io-open #io{display:flex}
     favView.setAttribute('aria-hidden', 'false');
   }
   function closeFavView() {
+    closeRootPop();   /* 收藏页内若开着拆解气泡，一并关闭 */
     document.body.classList.remove('fav-open');
     favView.setAttribute('aria-hidden', 'true');
   }
 
   function renderFavView() {
+    closeRootPop();   /* 重排前关闭气泡（其锚点行可能被移除） */
     fvBody.innerHTML = '';
     // 按 Unit 分组（Unit = 每 50 词一段，与主表结构一致）
     var groups = {};
@@ -1173,7 +1191,8 @@ body.io-open #io{display:flex}
       body.className = 'unit-body';
       groups[u].forEach(function (w, i) {
         var row = document.createElement('div');
-        row.className = 'row' + (i % 2 ? ' alt' : '');
+        var defHide = defmode === 'left' ? ' rhide' : defmode === 'right' ? ' whide' : '';
+        row.className = 'row' + (i % 2 ? ' alt' : '') + defHide;
         row.dataset.id = w.id;
 
         var cw = document.createElement('div');
@@ -1213,7 +1232,20 @@ body.io-open #io{display:flex}
         flow.appendChild(defs);
         cd.appendChild(flow);
 
-        // 收听按钮（收藏左、音频右；与主表一致）
+        // 词根拆解按钮（最左；与主表顺序一致：词根 → 收藏 → 读音）
+        var rb = document.createElement('button');
+        rb.className = 'root-btn';
+        rb.type = 'button';
+        rb.setAttribute('aria-label', '词根词缀拆解');
+        rb.innerHTML = rootSvg;
+        rb.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var r = rb.getBoundingClientRect();
+          toggleRootPop(w, r.left + r.width / 2, r.top, r.bottom);
+        });
+        cd.appendChild(rb);
+
+        // 收藏按钮（星标）
         var st = document.createElement('button');
         st.className = 'star on';
         st.type = 'button';
@@ -1350,11 +1382,12 @@ body.io-open #io{display:flex}
   });
   window.addEventListener('scroll', function () {
     if (document.body.classList.contains('root-open')) closeRootPop();
-  }, { passive: true });
+  }, { passive: true, capture: true });   /* capture：收藏视图内部滚动也能关气泡 */
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && document.body.classList.contains('fav-open')) closeFavView();
-    else if (e.key === 'Escape' && document.body.classList.contains('root-open')) closeRootPop();
+    if (e.key !== 'Escape') return;
+    if (document.body.classList.contains('root-open')) closeRootPop();
+    else if (document.body.classList.contains('fav-open')) closeFavView();
   });
 
   /* ================= 导入 / 导出 ================= */
@@ -1484,6 +1517,9 @@ body.io-open #io{display:flex}
   /* ================= 其它 ================= */
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    /* 收藏页/气泡开启时由各自的处理器负责，避免同时触发收起 */
+    if (document.body.classList.contains('fav-open')) return;
+    if (document.body.classList.contains('root-open')) return;
     if (ioOpen) closeIO();
     else if (sheetOpen) closeSheet();
     else collapseAll();
