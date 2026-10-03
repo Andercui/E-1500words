@@ -294,6 +294,7 @@ body.root-open #root-pop{display:block}
   .rp-part.tp-s{color:#ffb340}
 }
 .rp-tip{margin-top:11px;font-size:11.5px;color:var(--text2);line-height:1.5}
+.rp-tip:empty{display:none}
 .rp-legend{display:flex;gap:12px;font-size:11px;color:var(--text2)}
 .rp-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
 .rp-empty{font-size:13.5px;color:var(--text2);line-height:1.6}
@@ -1304,6 +1305,7 @@ body.io-open #io{display:flex}
     popWord.textContent = w.word;
     popPhon.textContent = '[' + w.phonetic + ']';
     popParts.innerHTML = '';
+    popTip.textContent = '';
     var parts = ROOTS[w.id];
     if (!parts || !parts.length) {
       popTip.textContent = '暂未收录该词的词根词缀拆解，建议结合词义整体记忆。';
@@ -1330,7 +1332,6 @@ body.io-open #io{display:flex}
       }
       popParts.appendChild(box);
     });
-    popTip.textContent = '拆解仅供记忆参考（前缀蓝 / 词根绿 / 后缀橙）。';
   }
 
   function closeRootPop() {
