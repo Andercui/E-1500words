@@ -1770,16 +1770,24 @@ body.sync-open #sync{display:flex}
     if (!ghCfg.token || !ghCfg.repo) { el.textContent = '未配置（数据仅存本机）'; return; }
     el.textContent = ghCfg.auto ? '自动同步已开启' : '已配置（手动同步）';
   }
-  /* 本地数据变化后调用：标记待上传，并按需延迟自动同步 */
+  /* 本地数据变化：只标记「待上传」，**不在每次点击后立刻提交**。
+     真正上传的时机：
+       ① 切到后台 / 关闭页面时（主要）—— 一次学习会话通常只产生 1 个提交
+       ② 距首次变化满 FALLBACK_MS 兜底一次（防止长时间停在前台一直不落盘）
+       ③ 手动点「保存并同步」
+     加上内容指纹比对，内容没变时不会产生空提交。 */
+  var FALLBACK_MS = 300000;   // 兜底上传间隔（5 分钟）
   function markSyncDirty() {
     syncDirty = true;
     dirtySeq++;
-    scheduleAutoSync();
-  }
-  function scheduleAutoSync() {
     if (!ghCfg.auto || !ghCfg.token || !ghCfg.repo) return;
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () { syncTimer = null; doSync(false); }, 2500);
+    if (syncTimer) return;    // 已有兜底定时器 → 让它到点再传
+    syncTimer = setTimeout(function () { syncTimer = null; doSync(false); }, FALLBACK_MS);
+  }
+  /* 立即落盘（切后台 / 关闭页面时调用） */
+  function flushSync() {
+    if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
+    if (syncDirty) doSync(false);
   }
   function b64encStr(s) {
     var b = new TextEncoder().encode(s), bin = '';
@@ -1858,6 +1866,25 @@ body.sync-open #sync{display:flex}
     if (sheetOpen) { renderSummary(); renderRank(); }
     if (document.body.classList.contains('fav-open')) renderFavView();
   }
+  /* 内容指纹（与键顺序无关）：用于判断"真的变了"才提交，避免空提交 */
+  function docSig(d) {
+    var f = d.favs || {}, ids = Object.keys(f).sort(), i;
+    var favs = [];
+    for (i = 0; i < ids.length; i++) {
+      var e = f[ids[i]] || [0, 0];
+      favs.push(ids[i] + ':' + (e[0] ? 1 : 0) + ':' + (Number(e[1]) || 0));
+    }
+    var devs = Object.keys(d.dev || {}).sort(), parts = [];
+    for (i = 0; i < devs.length; i++) {
+      var b = d.dev[devs[i]] || {}, cl = b.clicks || {}, ws = Object.keys(cl).sort(), seg = [];
+      for (var j = 0; j < ws.length; j++) {
+        var r = cl[ws[j]] || [0, 0];
+        seg.push(ws[j] + ':' + (Number(r[0]) || 0) + ':' + (Number(r[1]) || 0));
+      }
+      parts.push(devs[i] + '#' + (Number(b.t) || 0) + '#' + seg.join(','));
+    }
+    return hash32((Number(d.clicksResetAt) || 0) + '|' + favs.join(',') + '|' + parts.join('|'));
+  }
   function netErrText(e) {
     var m = (e && e.message) || String(e || '');
     if (/Failed to fetch|NetworkError|Load failed|network error/i.test(m)) {
@@ -1870,22 +1897,22 @@ body.sync-open #sync{display:flex}
     if (!ghCfg.token || !ghCfg.repo) { setSyncStatus('err', '请先填写仓库与 Token'); return; }
     syncBusy = true;
     setSyncStatus('run');
-    var seq0 = dirtySeq;
     var before = JSON.stringify(syncDoc);
     var pushed = false;
     ghPull().then(function (res) {
+      var remoteSig = res.doc ? docSig(res.doc) : '';
       if (res.doc) syncDoc = mergeDocs(syncDoc, res.doc);
       var changed = JSON.stringify(syncDoc) !== before;
       if (changed) { persistSyncDoc(); applyDoc(); refreshAfterSync(); }
-      if (!(syncDirty || changed || !res.doc)) return null;   // 两边一致 → 无需回传
-      syncDoc.updatedAt = Date.now();
-      pushed = true;
-      return ghPut(res.sha, 0);
-    }).then(function () {
-      if (pushed) {
-        if (dirtySeq === seq0) syncDirty = false;   // 同步期间没有新改动才算干净
-        else scheduleAutoSync();                    // 期间又有改动 → 再同步一次
+      /* 只有「合并结果 ≠ 远端内容」才回传 → 不会产生空提交 */
+      if (!res.doc || docSig(syncDoc) !== remoteSig) {
+        syncDoc.updatedAt = Date.now();
+        pushed = true;
+        return ghPut(res.sha, 0);
       }
+      return null;
+    }).then(function () {
+      if (pushed) { syncDirty = false; dirtySeq = 0; }
       syncLastOk = Date.now();
       syncErr = '';
       setSyncStatus('ok');
@@ -1909,7 +1936,9 @@ body.sync-open #sync{display:flex}
     syAuto.checked = !!ghCfg.auto;
     document.getElementById('sync-hint').textContent =
       '两台设备填同一份配置即可自动互相同步（收藏 + 点击次数）。' +
-      'Token 只保存在本机浏览器，仅用于读写这一个仓库，不会上传到别处。';
+      '数据在「切到后台 / 关闭页面」时上传，最多每 5 分钟兜底一次——' +
+      '一次学习通常只产生 1~5 个提交，内容没变化时不会提交。' +
+      'Token 只保存在本机浏览器，仅用于读写这一个仓库。';
     document.body.classList.add('sync-open');
   });
   document.getElementById('sync-close').addEventListener('click', closeSyncPanel);
@@ -1963,14 +1992,16 @@ body.sync-open #sync{display:flex}
     requestAnimationFrame(function () { fillVisible(); });
   }
 
-  /* 云同步：已配置则启动时自动拉取一次；回到前台时再补一次 */
+  /* 云同步：已配置则启动时自动拉取一次；切后台时落盘，回到前台时再拉一次 */
   setSyncStatus('idle');
   if (ghCfg.token && ghCfg.repo) {
     setTimeout(function () { doSync(false); }, 900);
   }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') doSync(false);
+    else flushSync();
   });
+  window.addEventListener('pagehide', flushSync);
 
   var ua = navigator.userAgent;
   var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
