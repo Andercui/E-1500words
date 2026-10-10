@@ -130,7 +130,8 @@ body{
    · 行间横线：#999
    与上下边线同机制绘制，保证各 DPR 下粗细表现一致 */
 .row{
-  display:grid;grid-template-columns:clamp(240px,24%,300px) 1fr;height:46px;
+  /* 三列：单词 | 音标+释义 | 按钮组（按钮独立成列，便于手机端改为跨行布局） */
+  display:grid;grid-template-columns:clamp(240px,24%,300px) 1fr auto;height:46px;
   font-family:var(--font-tbl);font-size:var(--fs-tbl);font-weight:400;
   background-color:var(--zebra-a);
   background-image:
@@ -185,11 +186,8 @@ body{
   background-size:1.5px 100%,1.5px 100%,100% 1.5px,100% 1.5px;
   background-position:left top,right top,left top,left bottom;
 }
-/* 窄屏(手机):左列收窄、字号收小(平板横屏不受影响) */
-@media (max-width:600px){
-  :root{--fs-tbl:17px}
-  .row{grid-template-columns:minmax(150px,40%) 1fr}
-}
+/* 手机竖屏（≤600px）的所有覆盖规则统一放在样式表末尾（见文件结尾），
+   避免被后面的桌面同特异性规则按层叠顺序覆盖 */
 .row.alt{background-color:var(--zebra-b)}
 .row:active{background-color:var(--press-bg)}
 /* 默认显示模式：所有行直接显示内容（滚动懒加载填充） */
@@ -212,7 +210,9 @@ body.defshow .row .cell-d{display:flex}
 }
 /* 语音按钮前的计数/时间已移除；按钮紧跟在释义之后 */
 .d-flow{flex:1 1 auto;display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden}
-.speak{margin-left:auto}
+/* 按钮组：行内独立一列，常显（不随释义显隐变化）；手机上跨两行排在右上。
+   左右 padding 与原来的 .cell-d 间距保持一致（释义与按钮之间 8px） */
+.row-btns{display:flex;flex:0 0 auto;align-items:center;gap:8px;padding:0 8px}
 .cell-w .w{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 点击次数默认隐藏（顶栏按钮切换 body.showcounts 后显示） */
 .badge{
@@ -220,7 +220,7 @@ body.defshow .row .cell-d{display:flex}
   padding:2px 7px;border-radius:10px;background:var(--badge1-bg);color:var(--badge1-fg);
 }
 body.showcounts .badge:not(:empty){display:inline-block}
-.cell-d{display:none;align-items:center;gap:8px;padding:0 8px 0 12px;min-width:0}
+.cell-d{display:none;align-items:center;gap:8px;padding:0 0 0 12px;min-width:0}
 .row.open .cell-d{display:flex;animation:fadeIn .18s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .d-flow{flex:1 1 auto;display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden}
@@ -400,6 +400,23 @@ body.io-open #io{display:flex}
 .io-btns{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .io-btns .s-btn{flex:0 0 auto;padding:11px 18px}
 
+/* ---------- 云同步（设置浮层 + 统计面板状态行） ---------- */
+#sync{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.45)}
+body.sync-open #sync{display:flex}
+#sync .io-card{width:min(460px,100%)}
+#sync .io-card h3{margin:0;font-size:17px}
+.sync-field{display:flex;align-items:center;gap:10px;font-size:13.5px}
+.sync-field>span{flex:0 0 54px;color:var(--text2)}
+.sync-field input{
+  flex:1 1 auto;min-width:0;border:.5px solid var(--sep);border-radius:10px;background:var(--card);
+  color:var(--text);font-size:14px;padding:9px 10px;
+}
+.sync-line{display:flex;align-items:center;gap:10px}
+.sync-line .s-btn{flex:0 0 auto;padding:11px 16px}
+.sync-status{flex:1 1 auto;min-width:0;font-size:12.5px;color:var(--text2);line-height:1.4}
+.sync-status.ok{color:#34c759}
+.sync-status.err{color:var(--red)}
+
 /* ---------- Toast ---------- */
 #toast{
   position:fixed;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));z-index:70;
@@ -410,6 +427,39 @@ body.io-open #io{display:flex}
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (prefers-color-scheme:dark){#toast{background:rgba(235,235,245,.95);color:#000}}
+
+/* ================= 手机竖屏（≤600px）覆盖规则 =================
+   ⚠️ 必须放在样式表末尾：媒体查询本身不提升优先级，
+   写在前面会被后面的桌面同特异性规则覆盖（如 .row-btns、按钮尺寸）。
+   布局改为「单词行 + 释义行」两行卡片：
+   原两列布局（左列 150px + 右侧按钮 ~140px）在 390px 竖屏下会把释义
+   挤到只剩约 30px 几乎不可见；现改为单词独占第一行、三个按钮独立成列
+   排在右上、音标+释义在第二行可换行完整显示（行高自适应，
+   惰性渲染已改为按实际几何位置测量）。 */
+@media (max-width:600px){
+  :root{--fs-tbl:16px}
+  /* 收窄页面左右留白（原 clamp 下限 36px 在手机上占掉近 1/5 宽度） */
+  #topbar,#banner,#fav-view .fv-head{padding-left:14px;padding-right:14px}
+  #list,.fv-body{padding-left:12px;padding-right:12px}
+
+  .row{
+    grid-template-columns:1fr auto;grid-template-areas:"w b" "d b";
+    column-gap:6px;height:auto;min-height:54px;padding:7px 8px 8px 10px;
+  }
+  .cell-w{grid-area:w;padding:0;background-image:none;min-height:24px}
+  .cell-w .w{font-size:17px;font-weight:600;letter-spacing:.01em}
+  /* 释义行：可换行完整显示（桌面为单行省略） */
+  body.defshow .row .cell-d,.row.open .cell-d{grid-area:d;display:block;padding:1px 0 0;min-height:20px}
+  .d-flow{display:block;white-space:normal;overflow:visible;font-size:15px;line-height:1.35}
+  .d-phon{display:inline;margin-right:6px;font-size:13.5px}
+  .d-defs{display:inline}
+  .def-line{display:inline;margin-right:9px}
+  .def-line .def{white-space:normal;overflow:visible;text-overflow:clip}
+  /* 按钮组：右上角与单词同行（3×32 + 2×5 = 106px，触控尺寸与桌面一致） */
+  .row-btns{grid-area:b;align-self:start;gap:5px;padding:0}
+  .root-btn,.star,.speak{width:32px;height:32px}
+  .root-btn svg,.star svg,.speak svg{width:16px;height:16px}
+}
 </style>
 </head>
 <body>
@@ -470,6 +520,10 @@ body.io-open #io{display:flex}
       <span>打开单词时自动发音</span>
       <span class="switch"><input type="checkbox" id="chk-auto"><span class="knob"></span></span>
     </label>
+    <div class="sync-line">
+      <button class="s-btn" id="btn-sync">云同步</button>
+      <span class="sync-status" id="sync-status">未配置（数据仅存本机）</span>
+    </div>
     <div class="s-actions">
       <button class="s-btn" id="btn-export">导出数据</button>
       <button class="s-btn" id="btn-import">导入数据</button>
@@ -495,6 +549,23 @@ body.io-open #io{display:flex}
     <p class="io-hint" id="io-hint"></p>
     <textarea id="io-text" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
     <div class="io-btns" id="io-btns"></div>
+  </div>
+</div>
+
+<!-- 云同步设置 -->
+<div id="sync">
+  <div class="io-card">
+    <h3>云同步</h3>
+    <p class="io-hint" id="sync-hint"></p>
+    <label class="sync-field"><span>仓库</span><input id="sync-repo" placeholder="用户名/仓库名" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
+    <label class="sync-field"><span>Token</span><input id="sync-token" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>
+    <label class="sync-field"><span>文件</span><input id="sync-path" placeholder="progress.json" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
+    <label class="switch-line"><span>自动同步（打开页面 / 数据变化时）</span><span class="switch"><input type="checkbox" id="sync-auto"><span class="knob"></span></span></label>
+    <div class="io-btns">
+      <button class="s-btn" id="sync-code">复制同步码</button>
+      <button class="s-btn primary" id="sync-now">保存并同步</button>
+      <button class="s-btn" id="sync-close">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -532,7 +603,8 @@ body.io-open #io{display:flex}
 
   var GROUP = 50;                 // 每 50 词一页
   var PAGES = Math.ceil(TOTAL / GROUP);
-  var ROW_H = 46, SEP_H = 34;     // 行高 / 页分隔带高度（与 CSS 保持一致）
+  /* 注：不再使用固定行高常量 —— 手机竖屏下行高随释义换行变化，
+     惰性渲染改为按实际几何位置测量（见 fillVisible） */
 
   /* ================= 存储 ================= */
   var LS_CLICKS = 'kaoyan1500.clicks.v1';
@@ -570,6 +642,150 @@ body.io-open #io{display:flex}
     if (s) { try { favs = JSON.parse(s) || {}; } catch (e) { favs = {}; } }
   })();
   function persistFavs() { lsSet(LS_FAVS, JSON.stringify(favs)); }
+
+  /* ================= 同步内核（跨设备合并） =================
+     数据模型（syncDoc）：
+       { v:2, updatedAt, clicksResetAt,
+         favs: { <id>: [on(0/1), ts] },                        // 收藏：按时间戳「后写优先」
+         dev:  { <deviceId>: { t, clicks: { <id>: [c, ts] } } } } // 点击：按设备分桶
+     要点：
+       · 点击次数按设备分桶累加，各设备只写自己的桶 → 同步/重复导入都不会重复计数
+       · 收藏用 LWW（最后操作者生效），因此「取消收藏」也能正确同步到另一台
+       · clicksResetAt：清空记录的时间点，早于它的记录一律忽略 */
+  var LS_SYNC = 'kaoyan1500.sync.v1';
+  var LS_DEVID = 'kaoyan1500.devid.v1';
+  var LS_GH = 'kaoyan1500.gh.v1';
+  var DEV_ID = (function () {
+    var s = lsGet(LS_DEVID);
+    if (!s) {
+      s = 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+      lsSet(LS_DEVID, s);
+    }
+    return s;
+  })();
+
+  function emptyDoc() {
+    return { app: 'kaoyan1500', v: 2, updatedAt: 0, clicksResetAt: 0, favs: {}, dev: {} };
+  }
+  function persistSyncDoc() { lsSet(LS_SYNC, JSON.stringify(syncDoc)); }
+  function ownBucket() {
+    var b = syncDoc.dev[DEV_ID];
+    if (!b) b = syncDoc.dev[DEV_ID] = { t: 0, clicks: {} };
+    if (!b.clicks) b.clicks = {};
+    return b;
+  }
+  function hash32(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 16777619) >>> 0; }
+    return h.toString(36);
+  }
+
+  var syncDoc = (function () {
+    var d = null;
+    try { var s = lsGet(LS_SYNC); if (s) d = JSON.parse(s); } catch (e) { d = null; }
+    if (!d || d.v !== 2) d = emptyDoc();
+    if (!d.favs) d.favs = {};
+    if (!d.dev) d.dev = {};
+    /* 首次启用同步：把本机既有数据迁入「本机分桶」与收藏表 */
+    if (!d.dev[DEV_ID]) {
+      var b = { t: Date.now(), clicks: {} };
+      for (var k in clicks) {
+        var r = clicks[k];
+        if (r && r.c > 0) b.clicks[k] = [r.c, r.t || Date.now()];
+      }
+      d.dev[DEV_ID] = b;
+    }
+    var now = Date.now();
+    for (var f in favs) { if (favs[f] && !d.favs[f]) d.favs[f] = [1, now]; }
+    return d;
+  })();
+
+  /* 由 syncDoc 重算本机显示用数据（clicks / favs） */
+  function applyDoc() {
+    var ra = syncDoc.clicksResetAt || 0;
+    var agg = {};
+    for (var dev in syncDoc.dev) {
+      var b = syncDoc.dev[dev];
+      if (!b || !b.clicks) continue;
+      for (var id in b.clicks) {
+        var rec = b.clicks[id];
+        if (!rec) continue;
+        var c = Math.floor(Number(rec[0])) || 0;
+        var t = Number(rec[1]) || 0;
+        if (c <= 0 || t < ra) continue;          // 清空记录之后的才计入
+        var cur = agg[id];
+        if (!cur) cur = agg[id] = { c: 0, t: 0 };
+        cur.c += c;
+        if (t > cur.t) cur.t = t;
+      }
+    }
+    clicks = agg;
+    var f = {};
+    for (var fid in syncDoc.favs) {
+      var e = syncDoc.favs[fid];
+      if (e && e[0]) f[fid] = 1;
+    }
+    favs = f;
+    persist();
+    persistFavs();
+  }
+
+  /* 合并两份文档（幂等 + 可交换，不会重复计数） */
+  function mergeDocs(a, b) {
+    var out = emptyDoc();
+    a = a || emptyDoc();
+    b = b || emptyDoc();
+    out.updatedAt = Math.max(a.updatedAt || 0, b.updatedAt || 0);
+    out.clicksResetAt = Math.max(a.clicksResetAt || 0, b.clicksResetAt || 0);
+    [a, b].forEach(function (d) {
+      var fs = d.favs || {}, i;
+      for (i in fs) {                              /* 收藏：LWW */
+        var e = fs[i];
+        if (!e) continue;
+        var cur = out.favs[i];
+        var ts = Number(e[1]) || 0;
+        if (!cur || ts > (Number(cur[1]) || 0)) out.favs[i] = [e[0] ? 1 : 0, ts];
+      }
+      var ds = d.dev || {}, dv;
+      for (dv in ds) {                             /* 点击：同一设备的桶按词取较大值（只增） */
+        var bk = ds[dv];
+        if (!bk) continue;
+        var ob = out.dev[dv] || (out.dev[dv] = { t: 0, clicks: {} });
+        if ((Number(bk.t) || 0) > ob.t) ob.t = Number(bk.t) || 0;
+        var cs = bk.clicks || {}, wi;
+        for (wi in cs) {
+          var r = cs[wi];
+          if (!r) continue;
+          var cNew = Math.floor(Number(r[0])) || 0;
+          var c0 = ob.clicks[wi];
+          if (!c0 || cNew >= (Number(c0[0]) || 0)) {
+            ob.clicks[wi] = [cNew, Math.max(Number(r[1]) || 0, c0 ? (Number(c0[1]) || 0) : 0)];
+          }
+        }
+      }
+    });
+    return out;
+  }
+
+  /* 旧版数据（v1：仅点击次数）→ 包成一个伪设备桶；重复导入不会重复计数 */
+  function legacyToDoc(obj) {
+    var src = (obj && obj.clicks && typeof obj.clicks === 'object') ? obj.clicks : obj;
+    if (!src || typeof src !== 'object') return null;
+    var bucket = { t: Date.now(), clicks: {} }, n = 0;
+    for (var k in src) {
+      if (!/^\d{1,5}$/.test(k)) continue;
+      var r = src[k];
+      if (!r || typeof r !== 'object') continue;
+      var c = Math.floor(Number(r.c));
+      if (!isFinite(c) || c <= 0) continue;
+      bucket.clicks[k] = [c, Number(r.t) || 0];
+      n++;
+    }
+    if (!n) return null;
+    var doc = emptyDoc();
+    doc.dev['legacy:' + hash32(JSON.stringify(bucket.clicks))] = bucket;
+    return doc;
+  }
 
   /* ================= 工具 ================= */
   function fmtDate(ts) {
@@ -782,10 +998,14 @@ body.io-open #io{display:flex}
     });
     ref.rootBtn = rb;
 
+    // 按钮统一放进 .row-btns：桌面在行右端独立一列；手机竖屏跨两行排在右上
+    var btns = document.createElement('div');
+    btns.className = 'row-btns';
+    btns.appendChild(rb);   // 词根
+    btns.appendChild(st);   // 收藏
+    btns.appendChild(sp);   // 读音（最右）
     cd.appendChild(flow);
-    cd.appendChild(rb);   // 词根
-    cd.appendChild(st);   // 收藏
-    cd.appendChild(sp);   // 读音（最右）
+    ref.row.appendChild(btns);
     ref.filled = true;
   }
 
@@ -793,6 +1013,10 @@ body.io-open #io{display:flex}
   function toggleFav(id) {
     if (favs[id]) delete favs[id]; else favs[id] = 1;
     persistFavs();
+    /* 同步用：带时间戳的最后操作，取消收藏也能同步到另一台 */
+    syncDoc.favs[id] = [favs[id] ? 1 : 0, Date.now()];
+    persistSyncDoc();
+    markSyncDirty();
     var ref = rowRefs[id];
     if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
     refreshFavCount();
@@ -812,6 +1036,14 @@ body.io-open #io{display:flex}
     rec.c += 1;
     rec.t = Date.now();
     persist();
+    /* 同步用：只写「本机分桶」，另一台设备的计数不会被重复计 */
+    var b = ownBucket();
+    var r = b.clicks[id] || (b.clicks[id] = [0, 0]);
+    r[0] = (Number(r[0]) || 0) + 1;
+    r[1] = rec.t;
+    b.t = rec.t;
+    persistSyncDoc();
+    markSyncDirty();
     refreshBadge(id);
     updateSub();
   }
@@ -880,33 +1112,33 @@ body.io-open #io{display:flex}
     document.body.classList.toggle('defmode-both', defmode === 'both');
   }
 
-  /* 仅填充可视范围内的行（惰性渲染；坐标含每 50 词一个的 Unit 留白） */
-  var AVG = ROW_H + SEP_H / GROUP;
-  function rowTop(i) { return SEP_H * (Math.floor(i / GROUP) + 1) + ROW_H * i; }
-  function rowIndexAt(y) {
-    if (y <= SEP_H) return 0;
-    var i = Math.floor((y - SEP_H) / AVG);
-    if (i < 0) i = 0;
-    if (i > TOTAL - 1) i = TOTAL - 1;
-    while (i > 0 && rowTop(i) > y) i--;
-    while (i < TOTAL - 1 && rowTop(i + 1) <= y) i++;
-    return i;
-  }
+  /* 仅填充可视范围内的行（惰性渲染）
+     按「实际几何位置」测量，不再用固定行高公式推算：
+     手机竖屏下释义会换行、行高不统一，固定公式会算错位置导致可视行漏填（空白行）。
+     两遍处理：先只读测量（避免读写交替触发反复布局），再统一写入。 */
+  var FILL_MARGIN = 400;   // 视口外预填范围（px），滚动时基本看不到正在填充
   function fillVisible() {
     if (!defmode) return;
-    var tr = tblEl.getBoundingClientRect();
-    var yTop = -tr.top;
-    var first = rowIndexAt(yTop) - 6;
-    var last = rowIndexAt(yTop + window.innerHeight) + 6;
-    if (first < 0) first = 0;
-    if (last > WORDS.length - 1) last = WORDS.length - 1;
-    for (var i = first; i <= last; i++) {
-      var w = WORDS[i];
-      var ref = rowRefs[w.id];
-      if (ref && !ref.filled) {
-        fillDetail(ref, w);
+    var vh = window.innerHeight;
+    var lo = -FILL_MARGIN, hi = vh + FILL_MARGIN;
+    var todo = null;
+    var kids = tblEl.children;                    // page-sep 与 unit-body 交替
+    for (var i = 0; i < kids.length; i++) {
+      var unit = kids[i];
+      if (!unit.classList.contains('unit-body')) continue;
+      var ur = unit.getBoundingClientRect();
+      if (ur.bottom < lo || ur.top > hi) continue;   // 整个 Unit 不在范围内
+      var rows = unit.children;
+      for (var j = 0; j < rows.length; j++) {
+        var el = rows[j];
+        var rr = el.getBoundingClientRect();
+        if (rr.bottom < lo || rr.top > hi) continue;
+        var ref = rowRefs[Number(el.dataset.id)];
+        if (ref && !ref.filled) (todo || (todo = [])).push(ref, byId[Number(el.dataset.id)]);
       }
     }
+    if (!todo) return;
+    for (var k = 0; k < todo.length; k += 2) fillDetail(todo[k], todo[k + 1]);
   }
 
   var visPending = false;
@@ -1243,7 +1475,10 @@ body.io-open #io{display:flex}
           var r = rb.getBoundingClientRect();
           toggleRootPop(w, r.left + r.width / 2, r.top, r.bottom);
         });
-        cd.appendChild(rb);
+        // 按钮组（与主表结构一致：桌面独立一列在右端；手机竖屏跨两行排在右上）
+        var btns = document.createElement('div');
+        btns.className = 'row-btns';
+        btns.appendChild(rb);
 
         // 收藏按钮（星标）
         var st = document.createElement('button');
@@ -1266,8 +1501,6 @@ body.io-open #io{display:flex}
             renderFavView();   // 重排（斑马纹、计数、Unit 顺序）
           }
         });
-        cd.appendChild(st);
-
         // 读音按钮（最右）
         var sp = document.createElement('button');
         sp.className = 'speak';
@@ -1278,9 +1511,11 @@ body.io-open #io{display:flex}
           e.stopPropagation();
           speak(w.word);
         });
-        cd.appendChild(sp);
+        btns.appendChild(st);
+        btns.appendChild(sp);
 
         row.appendChild(cd);
+        row.appendChild(btns);
         body.appendChild(row);
       });
       fvBody.appendChild(body);
@@ -1451,42 +1686,23 @@ body.io-open #io{display:flex}
       return true;
     } catch (e) { return false; }
   }
-  function mergeClicks(obj) {
-    var src = (obj && obj.clicks && typeof obj.clicks === 'object') ? obj.clicks : obj;
-    if (!src || typeof src !== 'object') return -1;
-    var n = 0;
-    for (var k in src) {
-      if (!/^\d{1,5}$/.test(k)) continue;
-      var r = src[k];
-      if (!r || typeof r !== 'object') continue;
-      var c = Math.floor(Number(r.c));
-      if (!isFinite(c) || c <= 0) continue;
-      var t = Number(r.t) || 0;
-      var cur = clicks[k];
-      if (!cur) cur = clicks[k] = { c: 0, t: 0 };
-      cur.c += c;
-      if (t > cur.t) cur.t = t;
-      n++;
-    }
-    if (n) { persist(); refreshAllBadges(); updateSub(); }
-    return n;
-  }
-
   document.getElementById('btn-export').addEventListener('click', function () {
-    var payload = { app: 'kaoyan1500', version: 1, exportedAt: new Date().toISOString(), clicks: clicks };
+    var payload = JSON.parse(JSON.stringify(syncDoc));
+    payload.exportedAt = new Date().toISOString();
+    payload.deviceId = DEV_ID;
     var text = JSON.stringify(payload, null, 1);
     openIO('导出数据',
-      '数据只保存在本机浏览器。换设备或清理浏览器数据前建议先导出；把 JSON 传到新设备后用「导入数据」合并即可。',
+      '包含收藏与点击次数（按设备分桶，重复导入不会重复计数）。换设备或清理浏览器数据前建议先导出；把 JSON 传到新设备后用「导入数据」合并即可。',
       text,
       [
         { t: '复制', fn: function () { copyText(text, function (ok) { if (!ok) toast('复制失败，请手动选择复制'); }); } },
-        { t: '下载 .json', fn: function () { if (!download('clicks_' + stamp() + '.json', text)) toast('下载不可用，请手动复制'); } },
+        { t: '下载 .json', fn: function () { if (!download('kaoyan1500_' + stamp() + '.json', text)) toast('下载不可用，请手动复制'); } },
         { t: '完成', primary: true, fn: closeIO }
       ]);
   });
   document.getElementById('btn-import').addEventListener('click', function () {
     openIO('导入数据',
-      '粘贴此前导出的 JSON 内容后点「合并导入」。注意：同一份数据重复导入会重复累加次数。',
+      '粘贴导出的 JSON（或另一台设备「云同步」里复制的同步码）后点「合并导入」。同一份数据重复导入不会重复计数。',
       '',
       [
         { t: '取消', fn: closeIO },
@@ -1496,9 +1712,17 @@ body.io-open #io{display:flex}
             if (!txt) { toast('请先粘贴 JSON 内容'); return; }
             var obj;
             try { obj = JSON.parse(txt); } catch (e) { toast('JSON 解析失败'); return; }
-            var n = mergeClicks(obj);
-            if (n < 0) { toast('数据格式不正确'); return; }
+            /* 支持两种格式：新的同步文档(v2) 与 旧版仅点击次数(v1) */
+            var doc = (obj && obj.dev && typeof obj.dev === 'object') ? obj : legacyToDoc(obj);
+            if (!doc) { toast('数据格式不正确'); return; }
+            var before = JSON.stringify(syncDoc);
+            syncDoc = mergeDocs(syncDoc, doc);
+            persistSyncDoc();
+            applyDoc();
+            refreshAfterSync();
+            markSyncDirty();
             closeIO();
+            toast(JSON.stringify(syncDoc) === before ? '没有发现新数据' : '已合并导入');
             if (sheetOpen) { renderSummary(); renderRank(); }
           }
         }
@@ -1506,13 +1730,208 @@ body.io-open #io{display:flex}
   });
   document.getElementById('btn-clear').addEventListener('click', function () {
     if (!confirm('确定清空所有点击记录？此操作不可撤销（建议先导出备份）。')) return;
+    var now = Date.now();
     clicks = {};
     persist();
+    /* 同步用：记录清空时间点（早于它的记录一律忽略），并清空本机分桶 */
+    syncDoc.clicksResetAt = now;
+    syncDoc.dev[DEV_ID] = { t: now, clicks: {} };
+    persistSyncDoc();
+    markSyncDirty();
     refreshAllBadges();
     updateSub();
     renderSummary();
     renderRank();
   });
+
+  /* ================= 云同步（GitHub 私有仓库，自动） =================
+     原理：把 syncDoc 存到仓库里的一个 JSON 文件；打开页面 / 数据变化时
+     自动「拉取 → 合并 → 需要时回传」，两台设备通过该文件汇合。
+     冲突：回传带 SHA；若另一台刚写过 → 重拉合并后重试（最多 3 次）。
+     Token 只存本机，仅用于读写该仓库。 */
+  var ghCfg = (function () {
+    var d = { repo: '', path: 'progress.json', branch: 'main', token: '', auto: true };
+    try {
+      var s = lsGet(LS_GH);
+      if (s) { var o = JSON.parse(s); for (var k in o) { if (o[k] !== undefined) d[k] = o[k]; } }
+    } catch (e) {}
+    return d;
+  })();
+  var syncBusy = false, syncTimer = null, syncDirty = false, dirtySeq = 0, syncLastOk = 0, syncErr = '';
+
+  function saveGhCfg() { lsSet(LS_GH, JSON.stringify(ghCfg)); }
+  function setSyncStatus(kind, msg) {
+    var el = document.getElementById('sync-status');
+    if (!el) return;
+    el.className = 'sync-status' + (kind === 'ok' ? ' ok' : kind === 'err' ? ' err' : '');
+    if (kind === 'run') { el.textContent = '同步中…'; return; }
+    if (kind === 'err') { el.textContent = '同步失败：' + (msg || ''); return; }
+    if (kind === 'ok') { el.textContent = '已同步 ' + new Date(syncLastOk).toTimeString().slice(0, 5); return; }
+    if (!ghCfg.token || !ghCfg.repo) { el.textContent = '未配置（数据仅存本机）'; return; }
+    el.textContent = ghCfg.auto ? '自动同步已开启' : '已配置（手动同步）';
+  }
+  /* 本地数据变化后调用：标记待上传，并按需延迟自动同步 */
+  function markSyncDirty() {
+    syncDirty = true;
+    dirtySeq++;
+    scheduleAutoSync();
+  }
+  function scheduleAutoSync() {
+    if (!ghCfg.auto || !ghCfg.token || !ghCfg.repo) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () { syncTimer = null; doSync(false); }, 2500);
+  }
+  function b64encStr(s) {
+    var b = new TextEncoder().encode(s), bin = '';
+    for (var i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+    return btoa(bin);
+  }
+  function b64decStr(s) {
+    var bin = atob(s), b = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(b);
+  }
+  function ghFileUrl() {
+    return 'https://api.github.com/repos/' + ghCfg.repo + '/contents/' +
+      encodeURIComponent(ghCfg.path) + '?ref=' + encodeURIComponent(ghCfg.branch);
+  }
+  function ghHeaders() {
+    var h = {
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    };
+    if (ghCfg.token) h['Authorization'] = 'Bearer ' + ghCfg.token;   // 无 Token 时可读公开文件
+    return h;
+  }
+  function ghErrText(status) {
+    if (status === 401) return 'Token 无效或已过期';
+    if (status === 403) return '权限不足（需 Contents 读写）或触发限流';
+    if (status === 404) return '仓库/文件不存在或 Token 无权访问';
+    if (status === 409 || status === 422) return '写入被拒（仓库可能为空：请先建一个 README 生成默认分支）';
+    return 'HTTP ' + status;
+  }
+  function ghPull() {
+    return fetch(ghFileUrl() + '&_=' + Date.now(), { headers: ghHeaders(), cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 404) return { doc: null, sha: null };   // 文件还没有 → 首次写入
+        if (!r.ok) throw new Error(ghErrText(r.status));
+        return r.json().then(function (j) {
+          var doc = null;
+          try { doc = JSON.parse(b64decStr(String(j.content || '').replace(/\s/g, ''))); } catch (e) { doc = null; }
+          return { doc: doc, sha: j.sha };
+        });
+      });
+  }
+  function ghPut(sha, tries, dropBranch) {
+    var body = {
+      message: 'sync ' + new Date().toISOString().slice(0, 16).replace('T', ' '),
+      content: b64encStr(JSON.stringify(syncDoc))
+    };
+    if (!dropBranch) body.branch = ghCfg.branch;
+    if (sha) body.sha = sha;
+    return fetch(ghFileUrl(), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) })
+      .then(function (r) {
+        if (r.ok) return true;
+        if ((r.status === 409 || r.status === 422) && (tries | 0) < 3) {
+          /* 空仓库（配置的分支还不存在）→ 退回默认分支再试一次 */
+          if (r.status === 422 && !dropBranch && !sha) {
+            return ghPut(null, (tries | 0) + 1, true);
+          }
+          /* 另一台设备刚写过 → 重新拉取合并后再回传 */
+          return ghPull().then(function (res) {
+            if (res.doc) {
+              syncDoc = mergeDocs(syncDoc, res.doc);
+              persistSyncDoc();
+              applyDoc();
+              refreshAfterSync();
+            }
+            return ghPut(res.sha, (tries | 0) + 1, dropBranch);
+          });
+        }
+        throw new Error(ghErrText(r.status));
+      });
+  }
+  function refreshAfterSync() {
+    refreshAllBadges();
+    updateSub();
+    refreshFavCount();
+    if (sheetOpen) { renderSummary(); renderRank(); }
+    if (document.body.classList.contains('fav-open')) renderFavView();
+  }
+  function netErrText(e) {
+    var m = (e && e.message) || String(e || '');
+    if (/Failed to fetch|NetworkError|Load failed|network error/i.test(m)) {
+      return '网络不通（无法访问 api.github.com，国内需科学上网）';
+    }
+    return m;
+  }
+  function doSync(manual) {
+    if (syncBusy) return;
+    if (!ghCfg.token || !ghCfg.repo) { setSyncStatus('err', '请先填写仓库与 Token'); return; }
+    syncBusy = true;
+    setSyncStatus('run');
+    var seq0 = dirtySeq;
+    var before = JSON.stringify(syncDoc);
+    var pushed = false;
+    ghPull().then(function (res) {
+      if (res.doc) syncDoc = mergeDocs(syncDoc, res.doc);
+      var changed = JSON.stringify(syncDoc) !== before;
+      if (changed) { persistSyncDoc(); applyDoc(); refreshAfterSync(); }
+      if (!(syncDirty || changed || !res.doc)) return null;   // 两边一致 → 无需回传
+      syncDoc.updatedAt = Date.now();
+      pushed = true;
+      return ghPut(res.sha, 0);
+    }).then(function () {
+      if (pushed) {
+        if (dirtySeq === seq0) syncDirty = false;   // 同步期间没有新改动才算干净
+        else scheduleAutoSync();                    // 期间又有改动 → 再同步一次
+      }
+      syncLastOk = Date.now();
+      syncErr = '';
+      setSyncStatus('ok');
+    }).catch(function (e) {
+      syncErr = netErrText(e);
+      setSyncStatus('err', syncErr);
+    }).then(function () { syncBusy = false; });
+  }
+
+  /* ---- 同步设置界面 ---- */
+  var syncPanel = document.getElementById('sync');
+  var syRepo = document.getElementById('sync-repo');
+  var syToken = document.getElementById('sync-token');
+  var syPath = document.getElementById('sync-path');
+  var syAuto = document.getElementById('sync-auto');
+  function closeSyncPanel() { document.body.classList.remove('sync-open'); }
+  document.getElementById('btn-sync').addEventListener('click', function () {
+    syRepo.value = ghCfg.repo || '';
+    syToken.value = ghCfg.token || '';
+    syPath.value = ghCfg.path || 'progress.json';
+    syAuto.checked = !!ghCfg.auto;
+    document.getElementById('sync-hint').textContent =
+      '两台设备填同一份配置即可自动互相同步（收藏 + 点击次数）。' +
+      'Token 只保存在本机浏览器，仅用于读写这一个仓库，不会上传到别处。';
+    document.body.classList.add('sync-open');
+  });
+  document.getElementById('sync-close').addEventListener('click', closeSyncPanel);
+  syncPanel.addEventListener('click', function (e) { if (e.target === syncPanel) closeSyncPanel(); });
+  document.getElementById('sync-now').addEventListener('click', function () {
+    ghCfg.repo = syRepo.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/+$/, '');
+    ghCfg.token = syToken.value.trim();
+    ghCfg.path = syPath.value.trim() || 'progress.json';
+    ghCfg.auto = !!syAuto.checked;
+    saveGhCfg();
+    closeSyncPanel();
+    doSync(true);
+  });
+  document.getElementById('sync-code').addEventListener('click', function () {
+    var text = JSON.stringify(syncDoc);
+    copyText(text, function (ok) {
+      if (ok) { closeSyncPanel(); toast('同步码已复制，可在另一台设备「导入数据」粘贴'); }
+      else toast('复制失败，请改用「导出数据」');
+    });
+  });
+  /* 打开统计面板时刷新状态文字 */
+  document.getElementById('btn-stats').addEventListener('click', function () { setSyncStatus('idle'); });
 
   /* ================= 其它 ================= */
   document.addEventListener('keydown', function (e) {
@@ -1520,6 +1939,7 @@ body.io-open #io{display:flex}
     /* 收藏页/气泡开启时由各自的处理器负责，避免同时触发收起 */
     if (document.body.classList.contains('fav-open')) return;
     if (document.body.classList.contains('root-open')) return;
+    if (document.body.classList.contains('sync-open')) { closeSyncPanel(); return; }
     if (ioOpen) closeIO();
     else if (sheetOpen) closeSheet();
     else collapseAll();
@@ -1542,6 +1962,15 @@ body.io-open #io{display:flex}
   if (defmode) {
     requestAnimationFrame(function () { fillVisible(); });
   }
+
+  /* 云同步：已配置则启动时自动拉取一次；回到前台时再补一次 */
+  setSyncStatus('idle');
+  if (ghCfg.token && ghCfg.repo) {
+    setTimeout(function () { doSync(false); }, 900);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') doSync(false);
+  });
 
   var ua = navigator.userAgent;
   var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
