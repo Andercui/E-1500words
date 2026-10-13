@@ -1801,7 +1801,7 @@ body.sync-open #sync{display:flex}
   }
   function ghFileUrl() {
     return 'https://api.github.com/repos/' + ghCfg.repo + '/contents/' +
-      encodeURIComponent(ghCfg.path) + '?ref=' + encodeURIComponent(ghCfg.branch);
+      encodeURIComponent(ghCfg.path) + '?ref=' + encodeURIComponent(curBranch());
   }
   function ghHeaders() {
     var h = {
@@ -1815,14 +1815,31 @@ body.sync-open #sync{display:flex}
     if (status === 401) return 'Token 无效或已过期';
     if (status === 403) return '权限不足（需 Contents 读写）或触发限流';
     if (status === 404) return '仓库/文件不存在或 Token 无权访问';
-    if (status === 409 || status === 422) return '写入被拒（仓库可能为空：请先建一个 README 生成默认分支）';
+    if (status === 409 || status === 422) return '写入被拒（若仓库为空：请先在仓库里添加一个 README 生成默认分支）';
     return 'HTTP ' + status;
+  }
+  /* 失败时尽量带上 GitHub 返回的具体原因（便于诊断） */
+  function ghFail(r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      var m = ghErrText(r.status);
+      if (j && j.message) m += ' ｜ ' + String(j.message).slice(0, 80);
+      throw new Error(m);
+    });
+  }
+  /* 运行时探明的「真实默认分支」（配置写 main、仓库实际是 master 时自动纠正） */
+  var branchOverride = null;
+  function curBranch() { return branchOverride || ghCfg.branch; }
+  function ghDefaultBranch() {
+    return fetch('https://api.github.com/repos/' + ghCfg.repo, { headers: ghHeaders(), cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return (j && j.default_branch) || ''; })
+      .catch(function () { return ''; });
   }
   function ghPull() {
     return fetch(ghFileUrl() + '&_=' + Date.now(), { headers: ghHeaders(), cache: 'no-store' })
       .then(function (r) {
         if (r.status === 404) return { doc: null, sha: null };   // 文件还没有 → 首次写入
-        if (!r.ok) throw new Error(ghErrText(r.status));
+        if (!r.ok) return ghFail(r);
         return r.json().then(function (j) {
           var doc = null;
           try { doc = JSON.parse(b64decStr(String(j.content || '').replace(/\s/g, ''))); } catch (e) { doc = null; }
@@ -1830,33 +1847,52 @@ body.sync-open #sync{display:flex}
         });
       });
   }
-  function ghPut(sha, tries, dropBranch) {
+  /* 写入云端文件。失败时按序自救：
+       ① 不带 branch 重试（空仓库：让 GitHub 用默认分支自动创建）
+       ② 查询仓库真实默认分支（配置写 main、实际是 master）后重试
+       ③ 重新拉取合并后用新 sha 重试（另一台设备刚写过） */
+  function ghPut(sha, tries, noBranch) {
     var body = {
       message: 'sync ' + new Date().toISOString().slice(0, 16).replace('T', ' '),
       content: b64encStr(JSON.stringify(syncDoc))
     };
-    if (!dropBranch) body.branch = ghCfg.branch;
+    if (!noBranch) body.branch = curBranch();
     if (sha) body.sha = sha;
     return fetch(ghFileUrl(), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) })
       .then(function (r) {
         if (r.ok) return true;
-        if ((r.status === 409 || r.status === 422) && (tries | 0) < 3) {
-          /* 空仓库（配置的分支还不存在）→ 退回默认分支再试一次 */
-          if (r.status === 422 && !dropBranch && !sha) {
-            return ghPut(null, (tries | 0) + 1, true);
+        if ((r.status === 409 || r.status === 422) && (tries | 0) < 4) {
+          if (!noBranch && !sha) return ghPut(null, (tries | 0) + 1, true);        // ①
+          if (!branchOverride) {
+            return ghDefaultBranch().then(function (b) {                            // ②
+              if (b && b !== curBranch()) {
+                branchOverride = b;
+                ghCfg.branch = b;
+                saveGhCfg();
+                return ghPut(sha, (tries | 0) + 1, false);
+              }
+              return ghPull().then(function (res) {                                 // ③
+                if (res.doc) {
+                  syncDoc = mergeDocs(syncDoc, res.doc);
+                  persistSyncDoc();
+                  applyDoc();
+                  refreshAfterSync();
+                }
+                return ghPut(res.sha, (tries | 0) + 1, false);
+              });
+            });
           }
-          /* 另一台设备刚写过 → 重新拉取合并后再回传 */
-          return ghPull().then(function (res) {
+          return ghPull().then(function (res) {                                     // ③
             if (res.doc) {
               syncDoc = mergeDocs(syncDoc, res.doc);
               persistSyncDoc();
               applyDoc();
               refreshAfterSync();
             }
-            return ghPut(res.sha, (tries | 0) + 1, dropBranch);
+            return ghPut(res.sha, (tries | 0) + 1, false);
           });
         }
-        throw new Error(ghErrText(r.status));
+        return ghFail(r);
       });
   }
   function refreshAfterSync() {
