@@ -1851,6 +1851,23 @@ body.sync-open #sync{display:flex}
        ① 不带 branch 重试（空仓库：让 GitHub 用默认分支自动创建）
        ② 查询仓库真实默认分支（配置写 main、实际是 master）后重试
        ③ 重新拉取合并后用新 sha 重试（另一台设备刚写过） */
+  /* 冲突后重新拉取 → 合并 → 用新 sha 重试。
+     若拉到的新 sha 与刚被拒的 sha 完全相同，说明「读取拿到的是旧数据」（常见于旧版 SW
+     把 api.github.com 的响应缓存住了），再重试也是白费 → 直接给出可操作的提示。 */
+  function ghResyncRetry(sha, tries) {
+    return ghPull().then(function (res) {
+      if (sha && res.sha === sha) {
+        throw new Error('云端读取仍返回旧数据（读取被缓存）：请完全关闭页面重新打开后再同步');
+      }
+      if (res.doc) {
+        syncDoc = mergeDocs(syncDoc, res.doc);
+        persistSyncDoc();
+        applyDoc();
+        refreshAfterSync();
+      }
+      return ghPut(res.sha, (tries | 0) + 1, false);
+    });
+  }
   function ghPut(sha, tries, noBranch) {
     var body = {
       message: 'sync ' + new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -1871,26 +1888,10 @@ body.sync-open #sync{display:flex}
                 saveGhCfg();
                 return ghPut(sha, (tries | 0) + 1, false);
               }
-              return ghPull().then(function (res) {                                 // ③
-                if (res.doc) {
-                  syncDoc = mergeDocs(syncDoc, res.doc);
-                  persistSyncDoc();
-                  applyDoc();
-                  refreshAfterSync();
-                }
-                return ghPut(res.sha, (tries | 0) + 1, false);
-              });
+              return ghResyncRetry(sha, tries);                                     // ③
             });
           }
-          return ghPull().then(function (res) {                                     // ③
-            if (res.doc) {
-              syncDoc = mergeDocs(syncDoc, res.doc);
-              persistSyncDoc();
-              applyDoc();
-              refreshAfterSync();
-            }
-            return ghPut(res.sha, (tries | 0) + 1, false);
-          });
+          return ghResyncRetry(sha, tries);                                         // ③
         }
         return ghFail(r);
       });
