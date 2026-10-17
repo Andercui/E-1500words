@@ -29,6 +29,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   --bg:#f2f2f7; --card:#fff; --text:#1c1c1e; --text2:#6e6e73;
   --sep:rgba(60,60,67,.16);
   --bar-bg:rgba(242,242,247,.85);
+  --bar-solid:#f2f2f7;
   --blue:#007aff; --blue-tint:rgba(0,122,255,.12);
   --red:#ff3b30;
   --zebra-a:#ffffff; --zebra-b:#e6e6e6;
@@ -46,6 +47,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   :root{
     --bg:#000; --card:#1c1c1e; --text:#f2f2f7; --text2:#98989d;
     --sep:rgba(84,84,88,.5);
+    --bar-solid:#000;
     --blue:#0a84ff; --blue-tint:rgba(10,132,255,.2);
     --red:#ff6961;
     --zebra-a:#1c1c1e; --zebra-b:#2c2c2e;
@@ -71,12 +73,13 @@ body{
   position:sticky;top:0;z-index:15;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
-  background:var(--bar-bg);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  /* 不用 backdrop-filter：sticky + 毛玻璃在页面高度突变（切换收藏视图）时
+     会重新采样背景导致顶栏闪一下；改成接近不透明的实色，视觉几乎无差别 */
+  background:var(--bar-solid);
   border-bottom:.5px solid var(--sep);
 }
 #topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em}
-#sub{display:block;font-size:12px;color:var(--text2);margin-top:3px}
+#sub{display:block;font-size:12px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .icon-btn{
   width:38px;height:38px;border-radius:50%;border:none;padding:0;
   background:var(--blue-tint);color:var(--blue);
@@ -301,32 +304,72 @@ body.root-open #root-pop{display:block}
 .rp-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
 .rp-empty{font-size:13.5px;color:var(--text2);line-height:1.6}
 
-/* ---------- 侧边 Unit 导航 ---------- */
-/* 桌面/平板常驻左栏；窄屏由 #nav-toggle 折叠展开（规则见样式表末尾） */
+/* ---------- 侧边 Unit 导航（刻度点阵） ----------
+   29 个 Unit 用「点 + 刻度」表示：每个 Unit 一个小圆点，每 5 项一个较大的
+   刻度点，当前项是一条竖向胶囊。一屏即可放下全部 Unit，几乎不占横向空间，
+   与 PDF 复刻的细线表格风格一致。
+   窄屏（≤560px）自动折叠为左下角按钮 + 文字列表抽屉（规则见样式表末尾）。 */
 #nav-toggle{
   position:fixed;left:8px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:22;
   display:none;box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
 #unit-nav{
-  position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:20;
-  max-height:min(72vh,640px);overflow-y:auto;overflow-x:hidden;
+  position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:20;
+  max-height:min(78vh,700px);overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:6px;border-radius:14px;
-  background:var(--bar-bg);-webkit-backdrop-filter:saturate(180%) blur(16px);
-  backdrop-filter:saturate(180%) blur(16px);
-  border:.5px solid var(--sep);box-shadow:0 2px 12px rgba(0,0,0,.10);
+  padding:6px 4px;background:transparent;
+}
+/* 只有真的能滚动时才加“上下渐隐”，否则首尾的点会被无谓地淡化 */
+#unit-nav.can-scroll{
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
+  mask-image:linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
 }
 #unit-nav::-webkit-scrollbar{width:0}
 #unit-nav:empty{display:none}
-.un-item{
-  display:block;width:100%;border:none;padding:6px 5px;margin:1px 0;
-  border-radius:8px;background:none;color:var(--text2);
-  font:600 10.5px/1.05 -apple-system,BlinkMacSystemFont,"PingFang SC",Arial,sans-serif;
-  letter-spacing:.02em;white-space:nowrap;cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
+/* 贯穿所有点的细竖线（时间轴/刻度尺的“尺身”） */
+#unit-nav::before{
+  content:"";position:absolute;left:50%;top:10px;bottom:10px;width:1px;
+  margin-left:-.5px;background:var(--text2);opacity:.18;pointer-events:none;
 }
-.un-item:hover{background:var(--blue-tint)}
-.un-item.on{background:var(--blue);color:#fff}
+.un-item{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:24px;height:21px;padding:0;margin:0;border:none;background:none;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none;
+}
+.un-item::before{                     /* 视觉圆点 */
+  content:"";width:5px;height:5px;border-radius:50%;
+  background:var(--text2);opacity:.42;
+  transition:width .18s,height .18s,opacity .18s,background .18s;
+}
+.un-item.major::before{                /* 每 5 个 Unit：稍大 */
+  width:6px;height:6px;opacity:.62;
+}
+.un-item.major::after{                 /* 每 5 个 Unit：左侧短刻度 */
+  content:"";position:absolute;left:0;top:50%;width:6px;height:1px;
+  background:var(--text2);opacity:.3;transform:translateY(-50%);
+}
+.un-item:hover::before,.un-item:focus-visible::before{
+  opacity:.95;width:9px;height:9px;
+}
+.un-item.on::before{                   /* 当前 Unit：竖向胶囊 */
+  width:3px;height:17px;border-radius:2px;background:var(--blue);opacity:1;
+}
+.un-item.on:hover::before{width:4px;height:17px;background:var(--blue)}
+/* 悬停/聚焦时右侧浮出的编号标签 */
+#un-tip{
+  position:fixed;z-index:23;transform:translateY(-50%);
+  padding:3px 7px;border-radius:7px;pointer-events:none;
+  background:rgba(28,28,30,.9);color:#fff;
+  font:600 11px/1.25 -apple-system,BlinkMacSystemFont,"PingFang SC",Arial,sans-serif;
+  letter-spacing:.02em;white-space:nowrap;
+  opacity:0;transition:opacity .12s;
+}
+#un-tip.show{opacity:1}
+@media (prefers-color-scheme:dark){
+  #un-tip{background:rgba(235,235,245,.92);color:#000}
+}
+/* 抽屉里的文字（桌面点阵模式隐藏） */
+.un-label{display:none}
 /* 收藏视图（仅收藏词）空态提示 */
 .tbl-empty{padding:60px 0;text-align:center;color:var(--text2);font-size:15px;line-height:1.8}
 
@@ -470,19 +513,28 @@ body.sync-open #sync{display:flex}
   .root-btn svg,.star svg,.speak svg{width:16px;height:16px}
 }
 
-/* ================= 窄屏（≤720px）：Unit 导航折叠 =================
-   常驻左栏会压住表格（窄屏左右留白只有 8vw ≈ 30-55px），
-   改为底部悬浮按钮 + 弹出竖排列表；点击某一项后自动收起。
+/* ================= 窄屏（≤560px）：Unit 点阵折叠为文字抽屉 =================
+   手机竖屏空间太小，点阵热区也不够准 → 左下角悬浮按钮 + 竖排文字列表
+   （1-unit / 2-unit…），点击后自动收起。
    ⚠️ 同样必须放在样式表末尾（媒体查询不提升优先级）。 */
-@media (max-width:720px){
+@media (max-width:560px){
   #nav-toggle{display:flex}
   #unit-nav{
-    left:8px;bottom:calc(68px + env(safe-area-inset-bottom));top:auto;transform:none;
-    max-height:52vh;display:none;z-index:21;
+    left:8px;right:auto;bottom:calc(76px + env(safe-area-inset-bottom));
+    top:auto;transform:none;
+    max-height:52vh;display:none;z-index:21;padding:6px;border-radius:14px;
+    background:var(--bar-solid);border:.5px solid var(--sep);
     box-shadow:0 8px 28px rgba(0,0,0,.22);
+    -webkit-mask-image:none;mask-image:none;
   }
+  #unit-nav::before{display:none}
   body.nav-open #unit-nav{display:block}
-  .un-item{padding:8px 6px;font-size:11px}
+  .un-item{width:66px;height:auto;padding:7px 6px;border-radius:8px}
+  .un-item::before,.un-item.major::after{display:none}
+  .un-label{display:block;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap}
+  .un-item.on{background:var(--blue)}
+  .un-item.on .un-label{color:#fff}
+  #un-tip{display:none}
 }
 </style>
 </head>
@@ -515,6 +567,7 @@ body.sync-open #sync{display:flex}
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h7M4 12h7M4 18h7"/><path d="M15 5h5M15 11h5M15 17h5" opacity=".5"/></svg>
 </button>
 <nav id="unit-nav" aria-label="Unit 快速跳转"></nav>
+<div id="un-tip" aria-hidden="true"></div>
 
 <div id="listwrap">
   <main id="list"><div class="tbl" id="tbl"></div></main>
@@ -922,22 +975,48 @@ body.sync-open #sync{display:flex}
     buildUnitNav();
   }
 
-  /* ================= 侧边 Unit 导航 ================= */
+  /* ================= 侧边 Unit 导航（刻度点阵） ================= */
   var navToggle = document.getElementById('nav-toggle');
+  var tipEl = document.getElementById('un-tip');
 
   function buildUnitNav() {
     navEl.innerHTML = '';
+    hideUnTip();
     for (var i = 0; i < sepEls.length; i++) {
+      var u = Number(sepEls[i].dataset.unit);
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'un-item';
-      b.textContent = sepEls[i].dataset.unit + '-unit';
+      b.className = 'un-item' + (u % 5 === 0 ? ' major' : '');
       b.dataset.i = i;
+      b.dataset.unit = u;
+      b.setAttribute('aria-label', '跳转到 Unit ' + u);
+      b.title = '';                       /* 用自己的浮标，避免系统 tooltip 延迟 */
+      var s = document.createElement('span');
+      s.className = 'un-label';
+      s.textContent = u + '-unit';
+      b.appendChild(s);
+      b.addEventListener('mouseenter', showUnTipFor);
+      b.addEventListener('mouseleave', hideUnTip);
+      b.addEventListener('focus', showUnTipFor);
+      b.addEventListener('blur', hideUnTip);
       navEl.appendChild(b);
     }
     measureUnits();
     updateNavActive();
+    navEl.classList.toggle('can-scroll', navEl.scrollHeight > navEl.clientHeight + 2);
   }
+
+  /* 点阵很窄，编号靠悬停/聚焦时的浮标显示（右侧小胶囊） */
+  function showUnTipFor(e) {
+    var b = e.currentTarget || e;
+    if (!b || !b.dataset) return;
+    var r = b.getBoundingClientRect();
+    tipEl.textContent = b.dataset.unit + '-unit';
+    tipEl.style.top = Math.round(r.top + r.height / 2) + 'px';
+    tipEl.style.left = Math.round(r.right + 8) + 'px';
+    tipEl.classList.add('show');
+  }
+  function hideUnTip() { tipEl.classList.remove('show'); }
 
   /* 记录每个 Unit 标签在文档中的位置（供滚动高亮） */
   function measureUnits() {
@@ -996,6 +1075,13 @@ body.sync-open #sync{display:flex}
       updateNavActive();
     })();
     document.body.classList.remove('nav-open');   // 窄屏点击后自动收起
+    navToggle.classList.remove('on');
+  }
+
+  /* 关闭窄屏抽屉（统一入口：保持按钮状态一致） */
+  function closeNavDrawer() {
+    document.body.classList.remove('nav-open');
+    navToggle.classList.remove('on');
   }
 
   navEl.addEventListener('click', function (e) {
@@ -1005,13 +1091,14 @@ body.sync-open #sync{display:flex}
   });
   navToggle.addEventListener('click', function () {
     var open = document.body.classList.toggle('nav-open');
+    navToggle.classList.toggle('on', open);
     if (open) updateNavActive();
   });
   /* 窄屏抽屉：点击空白处关闭 */
   document.addEventListener('click', function (e) {
     if (!document.body.classList.contains('nav-open')) return;
     if (e.target.closest('#unit-nav') || e.target.closest('#nav-toggle')) return;
-    document.body.classList.remove('nav-open');
+    closeNavDrawer();
   });
 
   function refreshBadge(id) {
@@ -1316,6 +1403,7 @@ body.sync-open #sync{display:flex}
       var filled = fillVisible();
       if (filled) measureUnits();   // 行高变化后 Unit 位置会移动
       updateNavActive();
+      hideUnTip();                  // 滚动时浮标会错位，直接收起
     });
   }
   window.addEventListener('scroll', onScrollVis, { passive: true });
@@ -1570,20 +1658,27 @@ body.sync-open #sync{display:flex}
   var mainScrollY = 0;
   document.getElementById('btn-fav').addEventListener('click', function () {
     closeRootPop();
+    hideUnTip();
     if (!favOnly) {
       mainScrollY = window.pageYOffset;
       favOnly = true;
+      /* 先回顶部再重建：避免「整表被清空 → 页面高度塌缩 → 滚动位置被强制归零」
+         造成顶栏重新合成（视觉上闪一下） */
+      window.scrollTo(0, 0);
       buildTable();
       updateSub();
       refreshFavCount();
-      window.scrollTo(0, 0);
     } else {
       favOnly = false;
-      buildTable();
+      buildTable();                    /* 先把整表高度恢复，再同步跳回原位置 */
       updateSub();
       refreshFavCount();
+      window.scrollTo(0, mainScrollY);
       requestAnimationFrame(function () {
-        window.scrollTo(0, Math.max(0, Math.min(mainScrollY, document.body.scrollHeight - window.innerHeight)));
+        /* 惰性填充可能改变行高 → 仅当位置偏移明显时才再校正（避免二次闪动） */
+        fillVisible();
+        var y = Math.min(mainScrollY, document.body.scrollHeight - window.innerHeight);
+        if (Math.abs(window.pageYOffset - y) > 2) window.scrollTo(0, y);
       });
     }
   });
@@ -1685,7 +1780,7 @@ body.sync-open #sync{display:flex}
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (document.body.classList.contains('root-open')) closeRootPop();
-    else if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open');
+    else if (document.body.classList.contains('nav-open')) closeNavDrawer();
   });
 
   /* ================= 导入 / 导出 ================= */
@@ -2075,7 +2170,7 @@ body.sync-open #sync{display:flex}
     if (e.key !== 'Escape') return;
     /* 气泡 / Unit 导航抽屉开启时由各自的处理器负责，避免同时触发收起 */
     if (document.body.classList.contains('root-open')) return;
-    if (document.body.classList.contains('nav-open')) { document.body.classList.remove('nav-open'); return; }
+    if (document.body.classList.contains('nav-open')) { closeNavDrawer(); return; }
     if (document.body.classList.contains('sync-open')) { closeSyncPanel(); return; }
     if (ioOpen) closeIO();
     else if (sheetOpen) closeSheet();
