@@ -301,25 +301,34 @@ body.root-open #root-pop{display:block}
 .rp-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
 .rp-empty{font-size:13.5px;color:var(--text2);line-height:1.6}
 
-/* ---------- 全屏收藏视图 ---------- */
-#fav-view{
-  position:fixed;inset:0;z-index:65;background:var(--bg);
-  display:none;flex-direction:column;
+/* ---------- 侧边 Unit 导航 ---------- */
+/* 桌面/平板常驻左栏；窄屏由 #nav-toggle 折叠展开（规则见样式表末尾） */
+#nav-toggle{
+  position:fixed;left:8px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:22;
+  display:none;box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
-body.fav-open #fav-view{display:flex}
-#fav-view .fv-head{
-  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
-  padding:calc(env(safe-area-inset-top) + 10px) clamp(36px,8vw,112px) 10px;
-  background:var(--bar-bg);-webkit-backdrop-filter:saturate(180%) blur(20px);
-  backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--sep);
+#unit-nav{
+  position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:20;
+  max-height:min(72vh,640px);overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:6px;border-radius:14px;
+  background:var(--bar-bg);-webkit-backdrop-filter:saturate(180%) blur(16px);
+  backdrop-filter:saturate(180%) blur(16px);
+  border:.5px solid var(--sep);box-shadow:0 2px 12px rgba(0,0,0,.10);
 }
-#fav-view .fv-head h2{margin:0;font-size:17px;font-weight:700}
-#fav-view .fv-actions{display:flex;align-items:center;gap:12px}
-.fv-body{
-  flex:1 1 auto;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:0 clamp(36px,8vw,112px) calc(40px + env(safe-area-inset-bottom));
+#unit-nav::-webkit-scrollbar{width:0}
+#unit-nav:empty{display:none}
+.un-item{
+  display:block;width:100%;border:none;padding:6px 5px;margin:1px 0;
+  border-radius:8px;background:none;color:var(--text2);
+  font:600 10.5px/1.05 -apple-system,BlinkMacSystemFont,"PingFang SC",Arial,sans-serif;
+  letter-spacing:.02em;white-space:nowrap;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
 }
-.fv-empty{padding:60px 0;text-align:center;color:var(--text2);font-size:15px;line-height:1.8}
+.un-item:hover{background:var(--blue-tint)}
+.un-item.on{background:var(--blue);color:#fff}
+/* 收藏视图（仅收藏词）空态提示 */
+.tbl-empty{padding:60px 0;text-align:center;color:var(--text2);font-size:15px;line-height:1.8}
 
 /* ---------- 统计面板（底部弹层） ---------- */
 #sheet-scrim{
@@ -439,8 +448,8 @@ body.sync-open #sync{display:flex}
 @media (max-width:600px){
   :root{--fs-tbl:16px}
   /* 收窄页面左右留白（原 clamp 下限 36px 在手机上占掉近 1/5 宽度） */
-  #topbar,#banner,#fav-view .fv-head{padding-left:14px;padding-right:14px}
-  #list,.fv-body{padding-left:12px;padding-right:12px}
+  #topbar,#banner{padding-left:14px;padding-right:14px}
+  #list{padding-left:12px;padding-right:12px}
 
   .row{
     grid-template-columns:1fr auto;grid-template-areas:"w b" "d b";
@@ -459,6 +468,21 @@ body.sync-open #sync{display:flex}
   .row-btns{grid-area:b;align-self:start;gap:5px;padding:0}
   .root-btn,.star,.speak{width:32px;height:32px}
   .root-btn svg,.star svg,.speak svg{width:16px;height:16px}
+}
+
+/* ================= 窄屏（≤720px）：Unit 导航折叠 =================
+   常驻左栏会压住表格（窄屏左右留白只有 8vw ≈ 30-55px），
+   改为底部悬浮按钮 + 弹出竖排列表；点击某一项后自动收起。
+   ⚠️ 同样必须放在样式表末尾（媒体查询不提升优先级）。 */
+@media (max-width:720px){
+  #nav-toggle{display:flex}
+  #unit-nav{
+    left:8px;bottom:calc(68px + env(safe-area-inset-bottom));top:auto;transform:none;
+    max-height:52vh;display:none;z-index:21;
+    box-shadow:0 8px 28px rgba(0,0,0,.22);
+  }
+  body.nav-open #unit-nav{display:block}
+  .un-item{padding:8px 6px;font-size:11px}
 }
 </style>
 </head>
@@ -486,6 +510,11 @@ body.sync-open #sync{display:flex}
 </header>
 
 <div id="banner" hidden>当前打开方式无法保存点击记录（例如「文件」预览）。建议通过 Safari 打开本页，或用统计面板中的「导出数据」备份。</div>
+
+<button id="nav-toggle" class="icon-btn" aria-label="Unit 快速跳转" title="Unit 快速跳转">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h7M4 12h7M4 18h7"/><path d="M15 5h5M15 11h5M15 17h5" opacity=".5"/></svg>
+</button>
+<nav id="unit-nav" aria-label="Unit 快速跳转"></nav>
 
 <div id="listwrap">
   <main id="list"><div class="tbl" id="tbl"></div></main>
@@ -531,17 +560,6 @@ body.sync-open #sync{display:flex}
     </div>
   </div>
 </section>
-
-<div id="fav-view" aria-hidden="true">
-  <div class="fv-head">
-    <h2 id="fv-title">⭐ 收藏的单词</h2>
-    <div class="fv-actions">
-      <button id="fv-defshow" class="icon-btn on" aria-label="显示模式（点按切换）" title="切换显示模式（左侧单词 / 右侧释义 / 两侧一起）"></button>
-      <button class="s-done" id="fv-close">完成</button>
-    </div>
-  </div>
-  <div class="fv-body" id="fv-body"></div>
-</div>
 
 <div id="io">
   <div class="io-card">
@@ -814,7 +832,6 @@ body.sync-open #sync{display:flex}
   var tblEl = document.getElementById('tbl');
   var subEl = document.getElementById('sub');
   var rowRefs = {};
-  var frag = document.createDocumentFragment();
   var SVG_SPEAK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.8 8.7a4.4 4.4 0 010 6.6M18.4 6a7.8 7.8 0 010 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
   var speakSvg = SVG_SPEAK;
   var starSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>';
@@ -823,43 +840,179 @@ body.sync-open #sync{display:flex}
   function makePageSep(unitNo) {
     var sep = document.createElement('div');
     sep.className = 'page-sep';
+    sep.dataset.unit = unitNo;
     var s = document.createElement('span');
     s.textContent = 'Unit ' + unitNo;
     sep.appendChild(s);
     return sep;
   }
-  var unitBody = null;
-  WORDS.forEach(function (w, i) {
-    if (i % GROUP === 0) {
-      frag.appendChild(makePageSep(i / GROUP + 1));
-      unitBody = document.createElement('div');
-      unitBody.className = 'unit-body';
-      frag.appendChild(unitBody);
+
+  /* ================= 表格（主表 / 只看收藏，共用同一套渲染） =================
+     favOnly = true 时把数据源换成「收藏的词」，其余完全一致：
+     同样的 Unit 分组、三态显隐、词根气泡、★/读音按钮、惰性填充。
+     切换视图 = 重建 DOM（收藏词通常只有几十个，重建很快）。 */
+  var favOnly = false;
+  var sepEls = [];      // 当前视图的 Unit 标签元素（侧边导航跳转用）
+  var sepTops = [];     // 各 Unit 标签的文档纵坐标（滚动高亮用）
+  var navActive = -1;
+  var navEl = document.getElementById('unit-nav');
+
+  function buildTable() {
+    var ids = [], i;
+    for (i = 0; i < WORDS.length; i++) {
+      if (!favOnly || favs[WORDS[i].id]) ids.push(WORDS[i]);
     }
-    var row = document.createElement('div');
-    row.className = 'row' + (i % 2 ? ' alt' : '');
-    row.dataset.id = w.id;
+    tblEl.innerHTML = '';
+    rowRefs = {};
+    sepEls = [];
+    sepTops = [];
+    navActive = -1;
 
-    // 左列：单词 + 点击角标
-    var cw = document.createElement('div');
-    cw.className = 'cell-w';
-    var t = document.createElement('span');
-    t.className = 'w';
-    t.textContent = w.word;
-    var b = document.createElement('span');
-    b.className = 'badge';
-    cw.appendChild(t);
-    cw.appendChild(b);
+    if (!ids.length) {
+      var empty = document.createElement('div');
+      empty.className = 'tbl-empty';
+      empty.textContent = '还没有收藏的单词。点击单词右侧的 ★ 即可加入收藏。';
+      tblEl.appendChild(empty);
+      buildUnitNav();
+      return;
+    }
 
-    // 右列：音标 + 发音按钮 + 释义（默认隐藏，随展开填充）
-    var cd = document.createElement('div');
-    cd.className = 'cell-d';
-    row.appendChild(cw);
-    row.appendChild(cd);
-    unitBody.appendChild(row);
-    rowRefs[w.id] = { row: row, badge: b, cellW: cw, cellD: cd, filled: false };
+    var frag = document.createDocumentFragment();
+    var unitBody = null;
+    var lastUnit = 0;
+    ids.forEach(function (w, i) {
+      var unit = Math.floor((w.id - 1) / GROUP) + 1;
+      if (unit !== lastUnit) {
+        lastUnit = unit;
+        var sep = makePageSep(unit);
+        sepEls.push(sep);
+        frag.appendChild(sep);
+        unitBody = document.createElement('div');
+        unitBody.className = 'unit-body';
+        frag.appendChild(unitBody);
+      }
+      var row = document.createElement('div');
+      row.className = 'row' + (i % 2 ? ' alt' : '');
+      row.dataset.id = w.id;
+
+      // 左列：单词 + 点击角标
+      var cw = document.createElement('div');
+      cw.className = 'cell-w';
+      var t = document.createElement('span');
+      t.className = 'w';
+      t.textContent = w.word;
+      var b = document.createElement('span');
+      b.className = 'badge';
+      cw.appendChild(t);
+      cw.appendChild(b);
+
+      // 右列：音标 + 发音按钮 + 释义（默认隐藏，随展开填充）
+      var cd = document.createElement('div');
+      cd.className = 'cell-d';
+      row.appendChild(cw);
+      row.appendChild(cd);
+      unitBody.appendChild(row);
+      rowRefs[w.id] = { row: row, badge: b, cellW: cw, cellD: cd, filled: false };
+    });
+    tblEl.appendChild(frag);
+
+    refreshAllBadges();
+    applyModeToRows();
+    fillVisible();
+    buildUnitNav();
+  }
+
+  /* ================= 侧边 Unit 导航 ================= */
+  var navToggle = document.getElementById('nav-toggle');
+
+  function buildUnitNav() {
+    navEl.innerHTML = '';
+    for (var i = 0; i < sepEls.length; i++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'un-item';
+      b.textContent = sepEls[i].dataset.unit + '-unit';
+      b.dataset.i = i;
+      navEl.appendChild(b);
+    }
+    measureUnits();
+    updateNavActive();
+  }
+
+  /* 记录每个 Unit 标签在文档中的位置（供滚动高亮） */
+  function measureUnits() {
+    sepTops = [];
+    var y = window.pageYOffset;
+    for (var i = 0; i < sepEls.length; i++) {
+      sepTops.push(sepEls[i].getBoundingClientRect().top + y);
+    }
+  }
+
+  function topbarH() {
+    var bar = document.getElementById('topbar');
+    return bar ? bar.offsetHeight : 0;
+  }
+
+  function updateNavActive() {
+    if (!sepTops.length) {
+      if (navActive !== -1) {
+        navActive = -1;
+        for (var k = 0; k < navEl.children.length; k++) navEl.children[k].classList.remove('on');
+      }
+      return;
+    }
+    var y = window.pageYOffset + topbarH() + 24;
+    var idx = 0;
+    for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
+    if (idx === navActive) return;
+    navActive = idx;
+    for (var j = 0; j < navEl.children.length; j++) {
+      navEl.children[j].classList.toggle('on', j === idx);
+    }
+    /* 让高亮项保持在导航可视范围内（不要用 scrollIntoView：会带着整页滚） */
+    var el = navEl.children[idx];
+    if (el) {
+      var t = el.offsetTop, h = el.offsetHeight;
+      if (t < navEl.scrollTop) navEl.scrollTop = Math.max(0, t - 6);
+      else if (t + h > navEl.scrollTop + navEl.clientHeight) {
+        navEl.scrollTop = t + h - navEl.clientHeight + 6;
+      }
+    }
+  }
+
+  /* 跳转到某个 Unit：
+     表格是惰性填充的（手机端行高随释义换行变化），直接滚过去会因
+     后续填充改变高度而偏移 → 连续几帧「滚动 → 填充 → 再校正」直到稳定 */
+  function jumpToUnit(idx) {
+    var sep = sepEls[idx];
+    if (!sep) return;
+    var n = 0;
+    (function settle() {
+      var top = sep.getBoundingClientRect().top + window.pageYOffset - topbarH() - 6;
+      window.scrollTo(0, Math.max(0, top));
+      fillVisible();
+      if (++n < 5) { requestAnimationFrame(settle); return; }
+      measureUnits();
+      updateNavActive();
+    })();
+    document.body.classList.remove('nav-open');   // 窄屏点击后自动收起
+  }
+
+  navEl.addEventListener('click', function (e) {
+    var b = e.target.closest('.un-item');
+    if (!b) return;
+    jumpToUnit(Number(b.dataset.i));
   });
-  tblEl.appendChild(frag);
+  navToggle.addEventListener('click', function () {
+    var open = document.body.classList.toggle('nav-open');
+    if (open) updateNavActive();
+  });
+  /* 窄屏抽屉：点击空白处关闭 */
+  document.addEventListener('click', function (e) {
+    if (!document.body.classList.contains('nav-open')) return;
+    if (e.target.closest('#unit-nav') || e.target.closest('#nav-toggle')) return;
+    document.body.classList.remove('nav-open');
+  });
 
   function refreshBadge(id) {
     var ref = rowRefs[id];
@@ -882,8 +1035,15 @@ body.sync-open #sync{display:flex}
     }
     return { seen: seen, total: tc };
   }
+  function favCount() {
+    var n = 0;
+    for (var k in favs) if (favs[k]) n++;
+    return n;
+  }
   function updateSub() {
-    var base = '共 ' + TOTAL + ' 词 · ' + PAGES + ' 个 Unit';
+    var base = favOnly
+      ? '只看收藏 · ' + favCount() + ' 词 · ' + sepEls.length + ' 个 Unit'
+      : '共 ' + TOTAL + ' 词 · ' + PAGES + ' 个 Unit';
     if (!showCounts) { subEl.textContent = base; return; }
     var s = computeStats();
     subEl.textContent = base + ' · 已查 ' + s.seen + ' · 点击 ' + s.total;
@@ -1019,15 +1179,26 @@ body.sync-open #sync{display:flex}
     markSyncDirty();
     var ref = rowRefs[id];
     if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
+    if (favOnly) {
+      /* 「只看收藏」视图里取消收藏 → 该行应消失：重建表格并保持滚动位置 */
+      var y = window.pageYOffset;
+      buildTable();
+      updateSub();
+      requestAnimationFrame(function () {
+        window.scrollTo(0, Math.max(0, Math.min(y, document.body.scrollHeight - window.innerHeight)));
+      });
+    }
     refreshFavCount();
   }
 
   function refreshFavCount() {
-    var n = 0;
-    for (var k in favs) if (favs[k]) n++;
+    var n = favCount();
     var btn = document.getElementById('btn-fav');
-    btn.classList.toggle('on', n > 0);
-    btn.setAttribute('aria-label', '查看收藏（' + n + '）');
+    btn.classList.toggle('on', favOnly);      /* 高亮 = 当前正处于「只看收藏」视图 */
+    var label = favOnly ? '返回全部单词' : '只看收藏（' + n + '）';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    if (favOnly) updateSub();
   }
 
   function countClick(id) {
@@ -1087,7 +1258,6 @@ body.sync-open #sync{display:flex}
                 (DEFMODE_KEY === 'en' ? 'left' : DEFMODE_KEY === 'zh' ? 'right' :
                  (lsGet(LS_DEFSHOW) === '1' ? 'both' : 'left'));   /* 默认：仅左侧（英文单词） */
   var btnDefShow = document.getElementById('btn-defshow');
-  var fvDefShow = document.getElementById('fv-defshow');   // 收藏视图内的同款三态按钮
   /* 图标：用「左块/右块」直观表达哪一侧显示 */
   var SVG_LEFT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg>';
   var SVG_RIGHT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/></svg>';
@@ -1101,11 +1271,6 @@ body.sync-open #sync{display:flex}
     btnDefShow.classList.toggle('on', true);
     btnDefShow.setAttribute('aria-label',
       '显示模式：' + DEFMODE_LABEL[defmode] + '（点按切换）');
-    if (fvDefShow) {
-      fvDefShow.innerHTML = icon;
-      fvDefShow.setAttribute('aria-label',
-        '显示模式：' + DEFMODE_LABEL[defmode] + '（点按切换）');
-    }
     document.body.classList.toggle('defshow', true);
     document.body.classList.toggle('defmode-en', defmode === 'left');
     document.body.classList.toggle('defmode-zh', defmode === 'right');
@@ -1137,18 +1302,29 @@ body.sync-open #sync{display:flex}
         if (ref && !ref.filled) (todo || (todo = [])).push(ref, byId[Number(el.dataset.id)]);
       }
     }
-    if (!todo) return;
+    if (!todo) return 0;
     for (var k = 0; k < todo.length; k += 2) fillDetail(todo[k], todo[k + 1]);
+    return todo.length / 2;   // 返回本次填充的行数（>0 说明高度可能变化 → 需重测 Unit 位置）
   }
 
   var visPending = false;
   function onScrollVis() {
     if (visPending) return;
     visPending = true;
-    requestAnimationFrame(function () { visPending = false; fillVisible(); });
+    requestAnimationFrame(function () {
+      visPending = false;
+      var filled = fillVisible();
+      if (filled) measureUnits();   // 行高变化后 Unit 位置会移动
+      updateNavActive();
+    });
   }
   window.addEventListener('scroll', onScrollVis, { passive: true });
   window.addEventListener('resize', onScrollVis, { passive: true });
+  window.addEventListener('resize', function () {
+    /* 视口变化会改变换行/行高 → 重测 Unit 位置 */
+    measureUnits();
+    updateNavActive();
+  }, { passive: true });
 
   /* 将当前模式的默认显隐状态批量应用到所有行（主表 + 收藏视图；同时清除用户的临时切换） */
   function applyModeToRows() {
@@ -1180,7 +1356,6 @@ body.sync-open #sync{display:flex}
     setDefaultShow(next);
   }
   btnDefShow.addEventListener('click', cycleDefMode);
-  if (fvDefShow) fvDefShow.addEventListener('click', cycleDefMode);
 
   /* ================= 点击次数显示开关（顶栏） ================= */
   var btnCounts = document.getElementById('btn-counts');
@@ -1369,161 +1544,49 @@ body.sync-open #sync{display:flex}
     if (!row) return;
     var id = Number(row.dataset.id);
     closeSheet();
-    rowRefs[id].row.scrollIntoView({ block: 'center' });
+    /* 「只看收藏」视图里，排行中的词可能不在当前表格 → 先切回全部单词 */
+    if (!rowRefs[id]) {
+      favOnly = false;
+      buildTable();
+      updateSub();
+      refreshFavCount();
+    }
+    var ref = rowRefs[id];
+    if (!ref) return;
+    fillVisible();
+    ref.row.scrollIntoView({ block: 'center' });
     expand(id);
+    requestAnimationFrame(function () {
+      var r2 = rowRefs[id];
+      if (!r2) return;
+      fillVisible();                                     /* 填充会改变行高 → 再对齐一次 */
+      r2.row.scrollIntoView({ block: 'center' });
+    });
   });
 
-  /* ================= 收藏视图（全屏，按 Unit 分组） ================= */
-  var favView = document.getElementById('fav-view');
-  var fvBody = document.getElementById('fv-body');
-
-  function openFavView() {
-    renderFavView();
-    document.body.classList.add('fav-open');
-    favView.setAttribute('aria-hidden', 'false');
-  }
-  function closeFavView() {
-    closeRootPop();   /* 收藏页内若开着拆解气泡，一并关闭 */
-    document.body.classList.remove('fav-open');
-    favView.setAttribute('aria-hidden', 'true');
-  }
-
-  function renderFavView() {
-    closeRootPop();   /* 重排前关闭气泡（其锚点行可能被移除） */
-    fvBody.innerHTML = '';
-    // 按 Unit 分组（Unit = 每 50 词一段，与主表结构一致）
-    var groups = {};
-    var count = 0;
-    WORDS.forEach(function (w) {
-      if (!favs[w.id]) return;
-      var unit = Math.floor((w.id - 1) / GROUP) + 1;
-      (groups[unit] || (groups[unit] = [])).push(w);
-      count++;
-    });
-    document.getElementById('fv-title').textContent = '⭐ 收藏的单词（' + count + '）';
-
-    if (!count) {
-      var e = document.createElement('div');
-      e.className = 'fv-empty';
-      e.textContent = '还没有收藏的单词。在单词右侧点击 ★ 即可加入收藏。';
-      fvBody.appendChild(e);
-      return;
-    }
-
-    Object.keys(groups).sort(function (a, b) { return a - b; }).forEach(function (u) {
-      // Unit 标签（与主表同款样式）
-      var sep = document.createElement('div');
-      sep.className = 'page-sep';
-      var s = document.createElement('span');
-      s.textContent = 'Unit ' + u;
-      sep.appendChild(s);
-      fvBody.appendChild(sep);
-
-      var body = document.createElement('div');
-      body.className = 'unit-body';
-      groups[u].forEach(function (w, i) {
-        var row = document.createElement('div');
-        var defHide = defmode === 'left' ? ' rhide' : defmode === 'right' ? ' whide' : '';
-        row.className = 'row' + (i % 2 ? ' alt' : '') + defHide;
-        row.dataset.id = w.id;
-
-        var cw = document.createElement('div');
-        cw.className = 'cell-w';
-        var t = document.createElement('span');
-        t.className = 'w';
-        t.textContent = w.word;
-        cw.appendChild(t);
-        row.appendChild(cw);
-
-        // 右侧：音标 + 词性 + 释义 + 读音 + 收藏
-        var cd = document.createElement('div');
-        cd.className = 'cell-d';
-        var flow = document.createElement('div');
-        flow.className = 'd-flow';
-        var ph = document.createElement('span');
-        ph.className = 'd-phon';
-        ph.textContent = '[' + w.phonetic + ']';
-        flow.appendChild(ph);
-        var defs = document.createElement('div');
-        defs.className = 'd-defs';
-        w.segs.forEach(function (sg) {
-          var line = document.createElement('div');
-          line.className = 'def-line';
-          if (sg.pos) {
-            var p = document.createElement('span');
-            p.className = 'pos';
-            p.textContent = sg.pos;
-            line.appendChild(p);
-          }
-          var d = document.createElement('span');
-          d.className = 'def';
-          d.textContent = sg.def;
-          line.appendChild(d);
-          defs.appendChild(line);
-        });
-        flow.appendChild(defs);
-        cd.appendChild(flow);
-
-        // 词根拆解按钮（最左；与主表顺序一致：词根 → 收藏 → 读音）
-        var rb = document.createElement('button');
-        rb.className = 'root-btn';
-        rb.type = 'button';
-        rb.setAttribute('aria-label', '词根词缀拆解');
-        rb.innerHTML = rootSvg;
-        rb.addEventListener('click', function (e) {
-          e.stopPropagation();
-          var r = rb.getBoundingClientRect();
-          toggleRootPop(w, r.left + r.width / 2, r.top, r.bottom);
-        });
-        // 按钮组（与主表结构一致：桌面独立一列在右端；手机竖屏跨两行排在右上）
-        var btns = document.createElement('div');
-        btns.className = 'row-btns';
-        btns.appendChild(rb);
-
-        // 收藏按钮（星标）
-        var st = document.createElement('button');
-        st.className = 'star on';
-        st.type = 'button';
-        st.setAttribute('aria-label', '取消收藏');
-        st.innerHTML = starSvg;
-        st.addEventListener('click', function (e) {
-          e.stopPropagation();
-          toggleFav(w.id);
-          // 行内取消后，从收藏视图移除该行
-          if (!favs[w.id]) {
-            if (body.querySelectorAll('.row').length <= 1) {
-              // 该 Unit 已空：连同标签一并移除
-              if (sep.parentNode) sep.parentNode.removeChild(sep);
-              if (body.parentNode) body.parentNode.removeChild(body);
-            } else {
-              if (row.parentNode) row.parentNode.removeChild(row);
-            }
-            renderFavView();   // 重排（斑马纹、计数、Unit 顺序）
-          }
-        });
-        // 读音按钮（最右）
-        var sp = document.createElement('button');
-        sp.className = 'speak';
-        sp.type = 'button';
-        sp.setAttribute('aria-label', '朗读');
-        sp.innerHTML = speakSvg;
-        sp.addEventListener('click', function (e) {
-          e.stopPropagation();
-          speak(w.word);
-        });
-        btns.appendChild(st);
-        btns.appendChild(sp);
-
-        row.appendChild(cd);
-        row.appendChild(btns);
-        body.appendChild(row);
+  /* ================= 收藏按钮：切换「只看收藏」视图 =================
+     不再单独实现一套 UI：仍是同一个表格，只是把数据源换成收藏词
+     （见 buildTable）。按钮高亮 = 当前正处于收藏视图。 */
+  var mainScrollY = 0;
+  document.getElementById('btn-fav').addEventListener('click', function () {
+    closeRootPop();
+    if (!favOnly) {
+      mainScrollY = window.pageYOffset;
+      favOnly = true;
+      buildTable();
+      updateSub();
+      refreshFavCount();
+      window.scrollTo(0, 0);
+    } else {
+      favOnly = false;
+      buildTable();
+      updateSub();
+      refreshFavCount();
+      requestAnimationFrame(function () {
+        window.scrollTo(0, Math.max(0, Math.min(mainScrollY, document.body.scrollHeight - window.innerHeight)));
       });
-      fvBody.appendChild(body);
-    });
-  }
-
-  document.getElementById('btn-fav').addEventListener('click', openFavView);
-  document.getElementById('fv-close').addEventListener('click', closeFavView);
+    }
+  });
 
   /* ================= 词根词缀气泡窗口 ================= */
   var ROOTS = DATA.roots || {};
@@ -1622,7 +1685,7 @@ body.sync-open #sync{display:flex}
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (document.body.classList.contains('root-open')) closeRootPop();
-    else if (document.body.classList.contains('fav-open')) closeFavView();
+    else if (document.body.classList.contains('nav-open')) document.body.classList.remove('nav-open');
   });
 
   /* ================= 导入 / 导出 ================= */
@@ -1901,7 +1964,15 @@ body.sync-open #sync{display:flex}
     updateSub();
     refreshFavCount();
     if (sheetOpen) { renderSummary(); renderRank(); }
-    if (document.body.classList.contains('fav-open')) renderFavView();
+    /* 收藏视图下同步到新的收藏集合 → 重建表格（尽量保持滚动位置） */
+    if (favOnly) {
+      var y = window.pageYOffset;
+      buildTable();
+      updateSub();
+      requestAnimationFrame(function () {
+        window.scrollTo(0, Math.max(0, Math.min(y, document.body.scrollHeight - window.innerHeight)));
+      });
+    }
   }
   /* 内容指纹（与键顺序无关）：用于判断"真的变了"才提交，避免空提交 */
   function docSig(d) {
@@ -2002,9 +2073,9 @@ body.sync-open #sync{display:flex}
   /* ================= 其它 ================= */
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    /* 收藏页/气泡开启时由各自的处理器负责，避免同时触发收起 */
-    if (document.body.classList.contains('fav-open')) return;
+    /* 气泡 / Unit 导航抽屉开启时由各自的处理器负责，避免同时触发收起 */
     if (document.body.classList.contains('root-open')) return;
+    if (document.body.classList.contains('nav-open')) { document.body.classList.remove('nav-open'); return; }
     if (document.body.classList.contains('sync-open')) { closeSyncPanel(); return; }
     if (ioOpen) closeIO();
     else if (sheetOpen) closeSheet();
@@ -2018,16 +2089,17 @@ body.sync-open #sync{display:flex}
     if (banner.dataset.kind === 'tip') lsSet(LS_TIP, '1');
   });
 
-  refreshAllBadges();
-  updateSub();
+  buildTable();                     /* 首次渲染（全部单词） */
   applyDefShowBtn();
-  applyModeToRows();
   applyCountsBtn();
   refreshFavCount();
+  updateSub();
   if (showCounts) document.body.classList.add('showcounts');
-  if (defmode) {
-    requestAnimationFrame(function () { fillVisible(); });
-  }
+  requestAnimationFrame(function () {
+    fillVisible();
+    measureUnits();
+    updateNavActive();
+  });
 
   /* 云同步：已配置则启动时自动拉取一次；切后台时落盘，回到前台时再拉一次 */
   setSyncStatus('idle');
