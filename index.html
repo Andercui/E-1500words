@@ -56,9 +56,16 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     --badge1-bg:rgba(120,120,128,.28); --badge1-fg:#a1a1a6;
   }
 }
-html{background:var(--bg)}
+html{
+  background:var(--bg);
+  /* 始终为滚动条预留空间：切换收藏视图时页面高度会从数万像素变成不足一屏，
+     否则滚动条消失会让内容宽度突变（顶栏右上角按钮横向跳动 = 视觉闪烁） */
+  scrollbar-gutter:stable;
+}
 body{
   margin:0;background:var(--bg);color:var(--text);
+  /* 顶栏为 fixed，用变量让出空间（高度含安全区，由 JS 测量后写入） */
+  padding-top:var(--topbar-h,68px);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
   -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;
   -webkit-tap-highlight-color:transparent;
@@ -69,12 +76,15 @@ body{
 }
 
 /* ---------- 顶栏 ---------- */
+/* 用 fixed 而不是 sticky：切换收藏视图时整页高度会从数万像素骤降到几百像素，
+   sticky 元素要跟着重新计算/重绘（iPad 上表现为顶栏轻微闪一下）；
+   fixed 完全脱离文档流，位置恒定 → 不再参与重排。
+   顶部占位由 JS 写入 --topbar-h，body 用 padding-top 让出空间。 */
 #topbar{
-  position:sticky;top:0;z-index:15;
+  position:fixed;top:0;left:0;right:0;z-index:15;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
-  /* 不用 backdrop-filter：sticky + 毛玻璃在页面高度突变（切换收藏视图）时
-     会重新采样背景导致顶栏闪一下；改成接近不透明的实色，视觉几乎无差别 */
+  /* 不用 backdrop-filter：毛玻璃在页面高度突变时要重新采样背景，会闪 */
   background:var(--bar-solid);
   border-bottom:.5px solid var(--sep);
 }
@@ -314,10 +324,11 @@ body.root-open #root-pop{display:block}
   display:none;box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
 #unit-nav{
-  position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:20;
+  position:fixed;left:8px;top:50%;transform:translateY(-50%);z-index:20;
+  width:40px;
   max-height:min(78vh,700px);overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:6px 4px;background:transparent;
+  padding:6px 0;background:transparent;
 }
 /* 只有真的能滚动时才加“上下渐隐”，否则首尾的点会被无谓地淡化 */
 #unit-nav.can-scroll{
@@ -326,28 +337,32 @@ body.root-open #root-pop{display:block}
 }
 #unit-nav::-webkit-scrollbar{width:0}
 #unit-nav:empty{display:none}
-/* 贯穿所有点的细竖线（时间轴/刻度尺的“尺身”） */
+/* 贯穿所有点的细竖线：位于“点”这一列的中心（列宽 16px → x=8） */
 #unit-nav::before{
-  content:"";position:absolute;left:50%;top:10px;bottom:10px;width:1px;
+  content:"";position:absolute;left:8px;top:10px;bottom:10px;width:1px;
   margin-left:-.5px;background:var(--text2);opacity:.18;pointer-events:none;
 }
 .un-item{
-  position:relative;display:flex;align-items:center;justify-content:center;
-  width:24px;height:21px;padding:0;margin:0;border:none;background:none;
+  position:relative;display:grid;grid-template-columns:16px 1fr;align-items:center;
+  width:100%;height:21px;padding:0;margin:0;border:none;background:none;
   cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none;
 }
 .un-item::before{                     /* 视觉圆点 */
-  content:"";width:5px;height:5px;border-radius:50%;
+  content:"";grid-column:1;justify-self:center;
+  width:5px;height:5px;border-radius:50%;
   background:var(--text2);opacity:.42;
   transition:width .18s,height .18s,opacity .18s,background .18s;
 }
 .un-item.major::before{                /* 每 5 个 Unit：稍大 */
   width:6px;height:6px;opacity:.62;
 }
-.un-item.major::after{                 /* 每 5 个 Unit：左侧短刻度 */
-  content:"";position:absolute;left:0;top:50%;width:6px;height:1px;
-  background:var(--text2);opacity:.3;transform:translateY(-50%);
+/* 每 5 个 Unit 的编号（5/10/15/20/25），标在点的右侧 */
+.un-num{
+  grid-column:2;justify-self:start;margin-left:4px;
+  font:600 10px/1 -apple-system,BlinkMacSystemFont,"PingFang SC",Arial,sans-serif;
+  color:var(--text2);opacity:.55;letter-spacing:0;
 }
+.un-item.major:hover .un-num{opacity:.95}
 .un-item:hover::before,.un-item:focus-visible::before{
   opacity:.95;width:9px;height:9px;
 }
@@ -521,7 +536,7 @@ body.sync-open #sync{display:flex}
   #nav-toggle{display:flex}
   #unit-nav{
     left:8px;right:auto;bottom:calc(76px + env(safe-area-inset-bottom));
-    top:auto;transform:none;
+    top:auto;transform:none;width:auto;
     max-height:52vh;display:none;z-index:21;padding:6px;border-radius:14px;
     background:var(--bar-solid);border:.5px solid var(--sep);
     box-shadow:0 8px 28px rgba(0,0,0,.22);
@@ -529,8 +544,11 @@ body.sync-open #sync{display:flex}
   }
   #unit-nav::before{display:none}
   body.nav-open #unit-nav{display:block}
-  .un-item{width:66px;height:auto;padding:7px 6px;border-radius:8px}
-  .un-item::before,.un-item.major::after{display:none}
+  .un-item{
+    display:flex;align-items:center;justify-content:center;
+    width:66px;height:auto;padding:7px 6px;border-radius:8px;
+  }
+  .un-item::before,.un-num{display:none}
   .un-label{display:block;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap}
   .un-item.on{background:var(--blue)}
   .un-item.on .un-label{color:#fff}
@@ -984,13 +1002,20 @@ body.sync-open #sync{display:flex}
     hideUnTip();
     for (var i = 0; i < sepEls.length; i++) {
       var u = Number(sepEls[i].dataset.unit);
+      var major = (u % 5 === 0);
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'un-item' + (u % 5 === 0 ? ' major' : '');
+      b.className = 'un-item' + (major ? ' major' : '');
       b.dataset.i = i;
       b.dataset.unit = u;
       b.setAttribute('aria-label', '跳转到 Unit ' + u);
       b.title = '';                       /* 用自己的浮标，避免系统 tooltip 延迟 */
+      if (major) {                        /* 每 5 个标一个数字：5/10/15/20/25 */
+        var n = document.createElement('span');
+        n.className = 'un-num';
+        n.textContent = u;
+        b.appendChild(n);
+      }
       var s = document.createElement('span');
       s.className = 'un-label';
       s.textContent = u + '-unit';
@@ -1409,10 +1434,20 @@ body.sync-open #sync{display:flex}
   window.addEventListener('scroll', onScrollVis, { passive: true });
   window.addEventListener('resize', onScrollVis, { passive: true });
   window.addEventListener('resize', function () {
-    /* 视口变化会改变换行/行高 → 重测 Unit 位置 */
+    /* 视口变化会改变换行/行高 → 重测 Unit 位置；顶栏（含安全区）高度也可能变 */
+    syncTopbarH();
     measureUnits();
     updateNavActive();
   }, { passive: true });
+  window.addEventListener('orientationchange', function () {
+    setTimeout(function () { syncTopbarH(); measureUnits(); updateNavActive(); }, 150);
+  });
+
+  /* 顶栏是 fixed：把实际高度（含刘海安全区）写入 --topbar-h，body 用 padding-top 让位 */
+  function syncTopbarH() {
+    var bar = document.getElementById('topbar');
+    if (bar) document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
+  }
 
   /* 将当前模式的默认显隐状态批量应用到所有行（主表 + 收藏视图；同时清除用户的临时切换） */
   function applyModeToRows() {
@@ -2184,6 +2219,7 @@ body.sync-open #sync{display:flex}
     if (banner.dataset.kind === 'tip') lsSet(LS_TIP, '1');
   });
 
+  syncTopbarH();
   buildTable();                     /* 首次渲染（全部单词） */
   applyDefShowBtn();
   applyCountsBtn();
@@ -2191,6 +2227,7 @@ body.sync-open #sync{display:flex}
   updateSub();
   if (showCounts) document.body.classList.add('showcounts');
   requestAnimationFrame(function () {
+    syncTopbarH();
     fillVisible();
     measureUnits();
     updateNavActive();
