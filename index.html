@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="98bc688ca447">
+<meta name="app-version" content="f54573fe9593">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -26,6 +26,10 @@
 
   /* 新版本提示条：仅当「之前已由 SW 控制」时才提示（首次安装不算更新） */
   var hadCtrl = !!navigator.serviceWorker.controller;
+  var acted = false;   /* 用户是否已经操作过（还没操作时可以直接静默更新） */
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (t) {
+    document.addEventListener(t, function () { acted = true; }, { passive: true, once: true });
+  });
   function showUpdateBar() {
     if (document.getElementById('sw-upd')) return;
     var bar = document.createElement('div');
@@ -39,6 +43,15 @@
   }
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (!hadCtrl) { hadCtrl = true; return; }
+    /* 刚打开、用户还没点任何东西 → 直接静默更新（否则用户很容易一直停在旧版本，
+       以为新功能「无效」）。每次会话最多自动刷一次，之后退回提示条。 */
+    try {
+      if (!acted && !sessionStorage.getItem('swAutoReload')) {
+        sessionStorage.setItem('swAutoReload', '1');
+        location.reload();
+        return;
+      }
+    } catch (e) { }
     showUpdateBar();
   });
 
@@ -1507,13 +1520,41 @@ body.sync-open #sync{display:flex}
     return true;
   }
 
+  /* iOS 偶发「DOM 已经改了，滚动层却没重绘」（旧行残留在屏幕上，要下次重建才消失）。
+     用同帧内 1px 的滚动微扰强制滚动层重新栅格化：中间不产生绘制，肉眼看不到位移。 */
+  function nudgeRepaint() {
+    var y = listWrapEl.scrollTop;
+    var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
+    var probe = (y < max) ? y + 1 : y - 1;
+    if (probe < 0 || probe === y) return;
+    listWrapEl.scrollTop = probe;
+    void listWrapEl.scrollHeight;         /* 读一次布局，让上一步立即生效 */
+    listWrapEl.scrollTop = y;
+  }
+
+  /* 兜底对账：只要在「只看收藏」视图，就把 favs 里已经不存在的行清掉。
+     不关心是哪条路径改了 favs（星星 / 导入 / 云同步），也不依赖当前这次点击是否走到位。 */
+  function reconcileFavRows() {
+    if (!favOnly) return false;
+    var rows = tblEl.querySelectorAll('.row');
+    var n = 0;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      var id = Number(rows[i].dataset.id);
+      if (favs[id]) continue;
+      try { if (dropFavRow(id)) n++; } catch (e) { }
+    }
+    if (!n) return false;
+    if (!Object.keys(rowRefs).length) buildTable();   /* 全删光 → 空状态 */
+    else { buildUnitNav(); updateSub(); }
+    nudgeRepaint();
+    return true;
+  }
+
   function toggleFav(id) {
     if (favs[id]) delete favs[id]; else favs[id] = 1;
-    persistFavs();
-    /* 同步用：带时间戳的最后操作，取消收藏也能同步到另一台 */
-    syncDoc.favs[id] = [favs[id] ? 1 : 0, Date.now()];
-    persistSyncDoc();
-    markSyncDirty();
+    /* ① 先改界面，再做持久化/同步：
+       即使后面某一步抛错（存储失败、同步状态异常），界面也已经是对的，
+       不会再出现「星星/行没变，但数据已经变了 → 下次打开才发现」的错位。 */
     var ref = rowRefs[id];
     if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
     if (favOnly && !favs[id]) {
@@ -1527,12 +1568,23 @@ body.sync-open #sync{display:flex}
         buildTable();                                     /* 兜底：退回整表重建 */
         updateSub();
       }
+      nudgeRepaint();
       requestAnimationFrame(function () {
         var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
         if (listWrapEl.scrollTop > max) listWrapEl.scrollTo(0, max);
+        reconcileFavRows();               /* 再对账一次（防上面某步被跳过） */
+        nudgeRepaint();
       });
     }
     refreshFavCount();
+    /* ② 持久化 + 同步：各自独立兜底，任何异常都不该影响界面 */
+    try { persistFavs(); } catch (e) { }
+    try {
+      /* 带时间戳的最后操作：取消收藏也能同步到另一台 */
+      syncDoc.favs[id] = [favs[id] ? 1 : 0, Date.now()];
+      persistSyncDoc();
+      markSyncDirty();
+    } catch (e) { }
   }
 
   function refreshFavCount() {
