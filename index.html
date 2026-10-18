@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="3edcc78f7b40">
+<meta name="app-version" content="36074e81963d">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -151,12 +151,19 @@ body{
    fixed 完全脱离文档流，位置恒定 → 不再参与重排。
    顶部占位由 JS 写入 --topbar-h，body 用 padding-top 让出空间。 */
 #topbar{
-  position:fixed;top:0;left:0;right:0;z-index:15;
+  position:fixed;top:0;left:0;right:0;z-index:30;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
   /* 不用 backdrop-filter：毛玻璃在页面高度突变时要重新采样背景，会闪 */
   background:var(--bar-solid);
   border-bottom:.5px solid var(--sep);
+  /* 独立合成层：iOS 上 fixed 元素若没有自己的层，滚动/重排时会被“补画”，
+     表现为下方单词先出现、顶栏随后才盖上去（一帧闪烁）。分层后由合成器直接平移。 */
+  -webkit-transform:translateZ(0);
+  transform:translateZ(0);
+  will-change:transform;
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
 }
 #topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em}
 #sub{display:block;font-size:12px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -204,6 +211,7 @@ body{
    实现：竖线画在 .tbl 容器（与 PDF 的 2 条竖线一一对应）；
          横线画在每行底部（+首行顶部），用渐变绘制以保证亚像素精度。 */
 #list{
+  position:relative;z-index:0;   /* 隔离表格内部的层叠，确保永远在 fixed 顶栏之下 */
   max-width:1180px;margin:0 auto;
   padding:0 clamp(36px,8vw,112px) calc(60px + env(safe-area-inset-bottom));
 }
