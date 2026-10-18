@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="670c89b2a190">
+<meta name="app-version" content="1c52cea15092">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -152,8 +152,13 @@ body{
 }
 #listwrap{
   flex:1 1 auto;min-height:0;
+  /* 独立层叠上下文：把表格的所有重绘关在滚动容器内，
+     避免大规模 DOM 变化（切换收藏/三态）时与顶栏的绘制交错 */
+  position:relative;z-index:0;
+  isolation:isolate;
   overflow-y:auto;overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;
+  /* 注意：不要加 -webkit-overflow-scrolling:touch —— iOS 13+ 默认就有惯性滚动，
+     该属性反而会创建特殊的滚动合成层，导致内容闪/层破裂 */
   overscroll-behavior:contain;
   scrollbar-gutter:stable;
 }
@@ -162,19 +167,20 @@ body{
 }
 
 /* ---------- 顶栏 ---------- */
-/* 用 fixed 而不是 sticky：切换收藏视图时整页高度会从数万像素骤降到几百像素，
-   sticky 元素要跟着重新计算/重绘（iPad 上表现为顶栏轻微闪一下）；
-   fixed 完全脱离文档流，位置恒定 → 不再参与重排。
-   顶部占位由 JS 写入 --topbar-h，body 用 padding-top 让出空间。 */
-/* ---------- 顶栏 ---------- */
-/* 顶栏在 #app 的 flex 流里，页面本身不滚动（滚动发生在 #listwrap），
-   因此不需要 fixed/sticky —— 从根上消除 iOS 上 fixed 元素“晚一帧补画”的闪烁。 */
+/* 顶栏在 #app 的 flex 流里，页面本身不滚动（滚动发生在 #listwrap）。
+   背景用**具体色值**而不是 CSS 变量：iOS 上变量背景在重绘时需要重新解析，
+   偶发出现“先透明、后填充”的一帧。 */
 #topbar{
   position:relative;z-index:30;flex:0 0 auto;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
-  background:var(--bar-solid);
+  background:#f2f2f7;
   border-bottom:.5px solid var(--sep);
+  /* 让顶栏成为最后一个绘制的“普通”元素：不建合成层，避免与滚动层抢顺序 */
+  -webkit-transform:none;transform:none;
+}
+@media (prefers-color-scheme:dark){
+  #topbar{background:#000}
 }
 #topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em}
 #sub{display:block;font-size:12px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -417,7 +423,9 @@ body.root-open #root-pop{display:block}
   position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:20;
   width:32px;
   max-height:min(78vh,700px);overflow-y:auto;overflow-x:hidden;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  /* 不加 -webkit-overflow-scrolling：fixed + 该属性会额外建滚动合成层，
+     iPad 上容易与指示条的 transform 抢绘制顺序（残影/闪烁） */
+  overscroll-behavior:contain;
   padding:6px 0;background:transparent;
   --pill-y:0px;                        /* 当前 Unit 指示条的位移（由 JS 更新） */
 }
