@@ -35,6 +35,35 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;          /* PUT 等直接走网络 */
   if (!sameOrigin(e.request.url)) return;          /* 跨域直接走网络 */
+
+  /* 页面导航（打开 / 刷新）单独处理：**网络优先，最多等 1.2s**，超时或离线才用缓存。
+     原因：纯缓存优先会让用户长期停留在旧 HTML —— 代码改了却「看不到效果」，
+     而且不点更新提示条就永远不刷新。其余同源静态资源仍然缓存优先（秒开）。 */
+  var nav = (e.request.mode === 'navigate') || (function (u) {
+    try { var p = new URL(u).pathname; return p.slice(-1) === '/' || /\/index\.html$/.test(p); }
+    catch (x) { return false; }
+  })(e.request.url);
+  if (nav) {
+    e.respondWith((function () {
+      var cacheP = caches.match('./index.html');
+      var netP = fetch(e.request, { cache: 'no-store' }).then(function (res) {
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
+        }
+        return res;
+      }).catch(function () { return null; });
+      var timeout = new Promise(function (r) { setTimeout(function () { r('timeout'); }, 1200); });
+      return Promise.race([netP, timeout]).then(function (res) {
+        if (res && res !== 'timeout') return res;
+        return cacheP.then(function (hit) { return hit || netP; });
+      }).catch(function () {
+        return cacheP.then(function (hit) { return hit || Response.error(); });
+      });
+    })());
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
       if (hit) return hit;
@@ -45,7 +74,6 @@ self.addEventListener('fetch', function (e) {
         }
         return res;
       }).catch(function () {
-        if (e.request.mode === 'navigate') return caches.match('./index.html');
         return Response.error();
       });
     })
