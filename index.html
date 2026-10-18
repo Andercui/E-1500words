@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="3b00df664ab3">
+<meta name="app-version" content="13a870f08494">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -370,6 +370,9 @@ body.showcounts .badge:not(:empty){display:inline-block}
 .star svg{width:17px;height:17px}
 .star:active{transform:scale(.92)}
 .star.on svg path{fill:currentColor}
+/* 收藏视图里刚取消收藏、行暂时保留（下次进入收藏视图才消失） */
+.row.unfav-pending{opacity:.45}
+.row.unfav-pending .star{opacity:1}
 /* 词根按钮（与读音/收藏同款，放在收藏左侧） */
 .root-btn{
   flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;
@@ -1360,6 +1363,11 @@ body.sync-open #sync{display:flex}
     var base = favOnly
       ? '只看收藏 · ' + favCount() + ' 词 · ' + sepEls.length + ' 个 Unit'
       : '共 ' + TOTAL + ' 词 · ' + PAGES + ' 个 Unit';
+    if (favOnly) {
+      /* 本次会话里已取消、但行还留着的词（下次进入收藏视图才消失） */
+      var pend = tblEl.querySelectorAll('.row.unfav-pending').length;
+      if (pend) base += ' · ' + pend + ' 个已取消（下次打开移除）';
+    }
     if (!showCounts) { subEl.textContent = base; return; }
     var s = computeStats();
     subEl.textContent = base + ' · 已查 ' + s.seen + ' · 点击 ' + s.total;
@@ -1486,132 +1494,16 @@ body.sync-open #sync{display:flex}
   }
 
   /* ================= 收藏 ================= */
-  /* 「只看收藏」视图里取消收藏：**局部摘掉这一行**（含变空的 Unit 块），不整表重建。
-     原因：iOS 上 tblEl.innerHTML='' + 大量新节点偶发「不重绘」，旧行会留着，
-     要等下次重新打开收藏页才消失；而且整表重建会让滚动位置跳一下。
-     返回 false 表示找不到行（调用方退回整表重建）。 */
-  function dropFavRow(id) {
-    var ref = rowRefs[id];
-    var row = ref && ref.row;
-    if (!row || !row.parentNode) return false;
-    var body = row.parentNode;
-    if (!body.classList || !body.classList.contains('unit-body')) return false;
-    var wasAbove = row.getBoundingClientRect().top < listWrapEl.getBoundingClientRect().top;
-    var h = row.offsetHeight || 0;
-    body.removeChild(row);
-    delete rowRefs[id];
-    if (!body.children.length) {
-      /* 该 Unit 已无收藏词 → 连标签一起去掉，并把 sepEls 同步好（导航据此变淡） */
-      var sep = body.previousElementSibling;
-      if (sep && sep.classList.contains('page-sep')) {
-        var i = sepEls.indexOf(sep);
-        if (i >= 0) { sepEls.splice(i, 1); sepTops.splice(i, 1); }
-        sep.parentNode.removeChild(sep);
-      }
-      body.parentNode.removeChild(body);
-    } else {
-      /* 建表时斑马纹按 i%2 分配，删行后会错位 → 本组重新分配 */
-      for (var k = 0; k < body.children.length; k++) {
-        body.children[k].classList.toggle('alt', k % 2 === 1);
-      }
-    }
-    /* 删掉的行在视口上方时，补偿它的高度，避免内容整体下移一行的距离 */
-    if (wasAbove) listWrapEl.scrollTop = Math.max(0, listWrapEl.scrollTop - h);
-    return true;
-  }
-
-  /* iOS 偶发「DOM 已经改了，滚动层却没重绘」（旧行残留在屏幕上，要下次重建才消失）。
-     用同帧内 1px 的滚动微扰强制滚动层重新栅格化：中间不产生绘制，肉眼看不到位移。 */
-  function nudgeRepaint() {
-    var y = listWrapEl.scrollTop;
-    var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
-    var probe = (y < max) ? y + 1 : y - 1;
-    if (probe < 0 || probe === y) return;
-    listWrapEl.scrollTop = probe;
-    void listWrapEl.scrollHeight;         /* 读一次布局，让上一步立即生效 */
-    listWrapEl.scrollTop = y;
-  }
-
-  /* 强制表格重绘：背景 alpha .004 肉眼看不出（行本身有不透明背景），
-     但会让浏览器把这块内容标记为「脏」→ 下一帧重新栅格化。 */
-  function forceRepaint() {
-    tblEl.style.backgroundColor = 'rgba(0,0,0,0.004)';
-    void tblEl.offsetHeight;
-    tblEl.style.backgroundColor = '';
-  }
-
-  /* 重绘泵：删行后连续几帧反复失效重绘（iOS 有时第一帧没反应，后面才跟上）。 */
-  function repaintPump(times) {
-    var left = times || 4;
-    (function step() {
-      forceRepaint();
-      if (!userTouching) nudgeRepaint();   /* 手指正在滚动时不要写 scrollTop，避免抢滚动 */
-      if (--left > 0) setTimeout(step, 70);
-    })();
-  }
-  /* 用户是否正在拖动（只在极短时间窗口内为 true） */
-  var userTouching = false, touchTimer = 0;
-  document.addEventListener('touchstart', function () {
-    userTouching = true; clearTimeout(touchTimer);
-  }, { passive: true });
-  document.addEventListener('touchend', function () {
-    clearTimeout(touchTimer);
-    touchTimer = setTimeout(function () { userTouching = false; }, 260);
-  }, { passive: true });
-
-  /* 兜底对账：只要在「只看收藏」视图，就把 favs 里已经不存在的行清掉。
-     不关心是哪条路径改了 favs（星星 / 导入 / 云同步），也不依赖当前这次点击是否走到位。 */
-  function reconcileFavRows() {
-    if (!favOnly) return false;
-    var rows = tblEl.querySelectorAll('.row');
-    var n = 0;
-    for (var i = rows.length - 1; i >= 0; i--) {
-      var id = Number(rows[i].dataset.id);
-      if (favs[id]) continue;
-      try { if (dropFavRow(id)) n++; } catch (e) { }
-    }
-    if (!n) return false;
-    if (!Object.keys(rowRefs).length) buildTable();   /* 全删光 → 空状态 */
-    else { buildUnitNav(); updateSub(); }
-    repaintPump(3);
-    return true;
-  }
-
-  /* 双保险：用户在收藏视图里操作过、或定时巡检时都对账一次。
-     这样即使某次点击的代码路径因故没走到位，行也会在 0.5s 内消失。 */
-  document.addEventListener('pointerup', function () {
-    if (!favOnly) return;
-    setTimeout(function () { reconcileFavRows(); }, 0);
-  }, { passive: true });
-  setInterval(function () {
-    if (favOnly && !document.hidden) reconcileFavRows();
-  }, 500);
-
   function toggleFav(id) {
     if (favs[id]) delete favs[id]; else favs[id] = 1;
-    /* ① 先改界面，再做持久化/同步：
-       即使后面某一步抛错（存储失败、同步状态异常），界面也已经是对的，
-       不会再出现「星星/行没变，但数据已经变了 → 下次打开才发现」的错位。 */
+    /* ① 先改界面，再做持久化/同步（存储或同步出错也不影响界面）。
+       收藏视图里取消收藏 → **行先留着**：只把星标变空心 + 整行淡出，
+       等下次重新进入收藏视图（buildTable 按 favs 过滤）才真正消失。 */
     var ref = rowRefs[id];
-    if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
-    if (favOnly && !favs[id]) {
-      /* 「只看收藏」视图里取消收藏 → 该行必须立刻消失 */
-      var ok = false;
-      try { ok = dropFavRow(id); } catch (e) { ok = false; }
-      if (ok) {
-        if (!Object.keys(rowRefs).length) buildTable();   /* 全删光 → 换成空状态提示 */
-        else { buildUnitNav(); updateSub(); }               /* 导航 .off / 副标题同步 */
-      } else {
-        buildTable();                                     /* 兜底：退回整表重建 */
-        updateSub();
-      }
-      nudgeRepaint();
-      repaintPump(4);
-      requestAnimationFrame(function () {
-        var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
-        if (listWrapEl.scrollTop > max) listWrapEl.scrollTo(0, max);
-        reconcileFavRows();               /* 再对账一次（防上面某步被跳过） */
-      });
+    var pending = favOnly && !favs[id];
+    if (ref) {
+      if (ref.star) ref.star.classList.toggle('on', !!favs[id]);
+      if (ref.row) ref.row.classList.toggle('unfav-pending', pending);
     }
     refreshFavCount();
     /* ② 持久化 + 同步：各自独立兜底，任何异常都不该影响界面 */
@@ -2419,8 +2311,10 @@ body.sync-open #sync{display:flex}
     updateSub();
     refreshFavCount();
     if (sheetOpen) { renderSummary(); renderRank(); }
-    /* 收藏视图下同步到新的收藏集合 → 重建表格（尽量保持滚动位置） */
-    if (favOnly) {
+    /* 收藏视图下同步到新的收藏集合 → 重建表格（尽量保持滚动位置）。
+       但本次会话里刚取消的行的带 .unfav-pending：有它在就先不重建，
+       否则 2.5s 后的自动同步会把它立刻删掉，违背「下次进来才消失」的预期。 */
+    if (favOnly && !tblEl.querySelectorAll('.row.unfav-pending').length) {
       var y = listWrapEl.scrollTop;
       buildTable();
       updateSub();
