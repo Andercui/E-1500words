@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="f54573fe9593">
+<meta name="app-version" content="3b00df664ab3">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -1532,6 +1532,33 @@ body.sync-open #sync{display:flex}
     listWrapEl.scrollTop = y;
   }
 
+  /* 强制表格重绘：背景 alpha .004 肉眼看不出（行本身有不透明背景），
+     但会让浏览器把这块内容标记为「脏」→ 下一帧重新栅格化。 */
+  function forceRepaint() {
+    tblEl.style.backgroundColor = 'rgba(0,0,0,0.004)';
+    void tblEl.offsetHeight;
+    tblEl.style.backgroundColor = '';
+  }
+
+  /* 重绘泵：删行后连续几帧反复失效重绘（iOS 有时第一帧没反应，后面才跟上）。 */
+  function repaintPump(times) {
+    var left = times || 4;
+    (function step() {
+      forceRepaint();
+      if (!userTouching) nudgeRepaint();   /* 手指正在滚动时不要写 scrollTop，避免抢滚动 */
+      if (--left > 0) setTimeout(step, 70);
+    })();
+  }
+  /* 用户是否正在拖动（只在极短时间窗口内为 true） */
+  var userTouching = false, touchTimer = 0;
+  document.addEventListener('touchstart', function () {
+    userTouching = true; clearTimeout(touchTimer);
+  }, { passive: true });
+  document.addEventListener('touchend', function () {
+    clearTimeout(touchTimer);
+    touchTimer = setTimeout(function () { userTouching = false; }, 260);
+  }, { passive: true });
+
   /* 兜底对账：只要在「只看收藏」视图，就把 favs 里已经不存在的行清掉。
      不关心是哪条路径改了 favs（星星 / 导入 / 云同步），也不依赖当前这次点击是否走到位。 */
   function reconcileFavRows() {
@@ -1546,9 +1573,19 @@ body.sync-open #sync{display:flex}
     if (!n) return false;
     if (!Object.keys(rowRefs).length) buildTable();   /* 全删光 → 空状态 */
     else { buildUnitNav(); updateSub(); }
-    nudgeRepaint();
+    repaintPump(3);
     return true;
   }
+
+  /* 双保险：用户在收藏视图里操作过、或定时巡检时都对账一次。
+     这样即使某次点击的代码路径因故没走到位，行也会在 0.5s 内消失。 */
+  document.addEventListener('pointerup', function () {
+    if (!favOnly) return;
+    setTimeout(function () { reconcileFavRows(); }, 0);
+  }, { passive: true });
+  setInterval(function () {
+    if (favOnly && !document.hidden) reconcileFavRows();
+  }, 500);
 
   function toggleFav(id) {
     if (favs[id]) delete favs[id]; else favs[id] = 1;
@@ -1569,11 +1606,11 @@ body.sync-open #sync{display:flex}
         updateSub();
       }
       nudgeRepaint();
+      repaintPump(4);
       requestAnimationFrame(function () {
         var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
         if (listWrapEl.scrollTop > max) listWrapEl.scrollTo(0, max);
         reconcileFavRows();               /* 再对账一次（防上面某步被跳过） */
-        nudgeRepaint();
       });
     }
     refreshFavCount();
