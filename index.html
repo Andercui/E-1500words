@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="36074e81963d">
+<meta name="app-version" content="670c89b2a190">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -128,18 +128,34 @@
 }
 html{
   background:var(--bg);
-  /* 始终为滚动条预留空间：切换收藏视图时页面高度会从数万像素变成不足一屏，
-     否则滚动条消失会让内容宽度突变（顶栏右上角按钮横向跳动 = 视觉闪烁） */
+  /* 始终为滚动条预留空间：切换收藏视图时内容高度会从数万像素变成不足一屏，
+     否则滚动条消失会让内容宽度突变 */
   scrollbar-gutter:stable;
+  height:100%;
 }
 body{
   margin:0;background:var(--bg);color:var(--text);
-  /* 顶栏为 fixed，用变量让出空间（高度含安全区，由 JS 测量后写入） */
-  padding-top:var(--topbar-h,68px);
+  height:100%;
+  /* 页面本身不滚动：滚动全部发生在 #listwrap 内，
+     顶栏因此不需要 fixed/sticky，彻底避免 iOS 上 fixed 层“补画”造成的闪烁 */
+  overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
   -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;
   -webkit-tap-highlight-color:transparent;
   overscroll-behavior-y:none;touch-action:manipulation;
+}
+/* 顶栏 + 提示条 + 滚动区 的纵向布局 */
+#app{
+  display:flex;flex-direction:column;
+  height:100vh;height:100dvh;
+  overflow:hidden;
+}
+#listwrap{
+  flex:1 1 auto;min-height:0;
+  overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
 }
 @media (prefers-reduced-motion:reduce){
   *{transition-duration:.01ms!important;animation-duration:.01ms!important}
@@ -150,20 +166,15 @@ body{
    sticky 元素要跟着重新计算/重绘（iPad 上表现为顶栏轻微闪一下）；
    fixed 完全脱离文档流，位置恒定 → 不再参与重排。
    顶部占位由 JS 写入 --topbar-h，body 用 padding-top 让出空间。 */
+/* ---------- 顶栏 ---------- */
+/* 顶栏在 #app 的 flex 流里，页面本身不滚动（滚动发生在 #listwrap），
+   因此不需要 fixed/sticky —— 从根上消除 iOS 上 fixed 元素“晚一帧补画”的闪烁。 */
 #topbar{
-  position:fixed;top:0;left:0;right:0;z-index:30;
+  position:relative;z-index:30;flex:0 0 auto;
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
-  /* 不用 backdrop-filter：毛玻璃在页面高度突变时要重新采样背景，会闪 */
   background:var(--bar-solid);
   border-bottom:.5px solid var(--sep);
-  /* 独立合成层：iOS 上 fixed 元素若没有自己的层，滚动/重排时会被“补画”，
-     表现为下方单词先出现、顶栏随后才盖上去（一帧闪烁）。分层后由合成器直接平移。 */
-  -webkit-transform:translateZ(0);
-  transform:translateZ(0);
-  will-change:transform;
-  -webkit-backface-visibility:hidden;
-  backface-visibility:hidden;
 }
 #topbar h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.01em}
 #sub{display:block;font-size:12px;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -180,6 +191,7 @@ body{
 
 /* ---------- 提示条 ---------- */
 #banner{
+  flex:0 0 auto;
   background:rgba(255,159,10,.16);padding:10px clamp(36px,8vw,112px);font-size:13px;line-height:1.45;
   border-bottom:.5px solid var(--sep);cursor:pointer;
 }
@@ -641,6 +653,8 @@ body.sync-open #sync{display:flex}
 </head>
 <body>
 
+<div id="app">
+
 <header id="topbar">
   <div>
     <h1>1500词</h1>
@@ -664,15 +678,17 @@ body.sync-open #sync{display:flex}
 
 <div id="banner" hidden>当前打开方式无法保存点击记录（例如「文件」预览）。建议通过 Safari 打开本页，或用统计面板中的「导出数据」备份。</div>
 
+<div id="listwrap">
+  <main id="list"><div class="tbl" id="tbl"></div></main>
+</div>
+
+</div><!-- /#app -->
+
 <button id="nav-toggle" class="icon-btn" aria-label="Unit 快速跳转" title="Unit 快速跳转">
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h7M4 12h7M4 18h7"/><path d="M15 5h5M15 11h5M15 17h5" opacity=".5"/></svg>
 </button>
 <nav id="unit-nav" aria-label="Unit 快速跳转"></nav>
 <div id="un-tip" aria-hidden="true"></div>
-
-<div id="listwrap">
-  <main id="list"><div class="tbl" id="tbl"></div></main>
-</div>
 
 <div id="sheet-scrim"></div>
 <section id="sheet" aria-hidden="true">
@@ -983,6 +999,7 @@ body.sync-open #sync{display:flex}
 
   /* ================= 表格 ================= */
   var listEl = document.getElementById('list');
+  var listWrapEl = document.getElementById('listwrap');   /* 真正的滚动容器 */
   var tblEl = document.getElementById('tbl');
   var subEl = document.getElementById('sub');
   var rowRefs = {};
@@ -1121,6 +1138,12 @@ body.sync-open #sync{display:flex}
       btn.disabled = off;
     }
 
+    /* 清掉上一视图残留的高亮（导航 DOM 常驻，切视图时必须显式清除，
+       否则会同时出现两个 .on） */
+    var stale = navEl.querySelectorAll('.un-item.on');
+    for (var s = 0; s < stale.length; s++) stale[s].classList.remove('on');
+    navOnIdx = -1;
+
     navEl.classList.toggle('empty', !sepEls.length);
     navEl.classList.toggle('can-scroll', navEl.scrollHeight > navEl.clientHeight + 2);
     measureUnits();
@@ -1147,12 +1170,12 @@ body.sync-open #sync{display:flex}
   }
   function hideUnTip() { tipEl.classList.remove('show'); }
 
-  /* 记录每个 Unit 标签在文档中的位置（供滚动高亮） */
+  /* 记录每个 Unit 标签在**滚动内容**中的位置（供滚动高亮） */
   function measureUnits() {
     sepTops = [];
-    var y = window.pageYOffset;
+    var base = listWrapEl.getBoundingClientRect().top;
     for (var i = 0; i < sepEls.length; i++) {
-      sepTops.push(sepEls[i].getBoundingClientRect().top + y);
+      sepTops.push(sepEls[i].getBoundingClientRect().top - base + listWrapEl.scrollTop);
     }
   }
 
@@ -1167,7 +1190,7 @@ body.sync-open #sync{display:flex}
        指示条则只用 transform 移动 → 合成器完成，不重绘，iOS 不会留残影。 */
     var btnIdx = -1;
     if (sepTops.length) {
-      var y = window.pageYOffset + topbarH() + 24;
+      var y = listWrapEl.scrollTop + 24;   /* 相对滚动内容顶部 */
       var idx = 0;
       for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
       btnIdx = Number(sepEls[idx].dataset.unit) - 1;
@@ -1212,14 +1235,15 @@ body.sync-open #sync{display:flex}
     if (!sep) return;
     hideUnTip();
     function goal() {
-      return Math.max(0, sep.getBoundingClientRect().top + window.pageYOffset - topbarH() - 6);
+      var base = listWrapEl.getBoundingClientRect().top;
+      return Math.max(0, sep.getBoundingClientRect().top - base + listWrapEl.scrollTop - 6);
     }
-    window.scrollTo(0, goal());
+    listWrapEl.scrollTo(0, goal());
     var n = 0;
     (function settle() {
       fillVisible();
       var g = goal();
-      if (Math.abs(g - window.pageYOffset) > 2) window.scrollTo(0, g);
+      if (Math.abs(g - listWrapEl.scrollTop) > 2) listWrapEl.scrollTo(0, g);
       if (++n < 3) { requestAnimationFrame(settle); return; }
       measureUnits();
       updateNavActive();
@@ -1417,11 +1441,11 @@ body.sync-open #sync{display:flex}
     if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
     if (favOnly) {
       /* 「只看收藏」视图里取消收藏 → 该行应消失：重建表格并保持滚动位置 */
-      var y = window.pageYOffset;
+      var y = listWrapEl.scrollTop;
       buildTable();
       updateSub();
       requestAnimationFrame(function () {
-        window.scrollTo(0, Math.max(0, Math.min(y, document.body.scrollHeight - window.innerHeight)));
+        listWrapEl.scrollTo(0, Math.max(0, Math.min(y, listWrapEl.scrollHeight - listWrapEl.clientHeight)));
       });
     }
     refreshFavCount();
@@ -1519,9 +1543,9 @@ body.sync-open #sync{display:flex}
      两遍处理：先只读测量（避免读写交替触发反复布局），再统一写入。 */
   var FILL_MARGIN = 400;   // 视口外预填范围（px），滚动时基本看不到正在填充
   function fillVisible() {
-    if (!defmode) return;
-    var vh = window.innerHeight;
-    var lo = -FILL_MARGIN, hi = vh + FILL_MARGIN;
+    if (!defmode) return 0;
+    var box = listWrapEl.getBoundingClientRect();     /* 滚动容器的可视区域 */
+    var lo = box.top - FILL_MARGIN, hi = box.bottom + FILL_MARGIN;
     var todo = null;
     var kids = tblEl.children;                    // page-sep 与 unit-body 交替
     for (var i = 0; i < kids.length; i++) {
@@ -1555,7 +1579,7 @@ body.sync-open #sync{display:flex}
       hideUnTip();                  // 滚动时浮标会错位，直接收起
     });
   }
-  window.addEventListener('scroll', onScrollVis, { passive: true });
+  listWrapEl.addEventListener('scroll', onScrollVis, { passive: true });
   window.addEventListener('resize', onScrollVis, { passive: true });
   window.addEventListener('resize', function () {
     /* 视口变化会改变换行/行高 → 重测 Unit 位置；顶栏（含安全区）高度也可能变 */
@@ -1819,11 +1843,10 @@ body.sync-open #sync{display:flex}
     closeRootPop();
     hideUnTip();
     if (!favOnly) {
-      mainScrollY = window.pageYOffset;
+      mainScrollY = listWrapEl.scrollTop;
       favOnly = true;
-      /* 先回顶部再重建：避免「整表被清空 → 页面高度塌缩 → 滚动位置被强制归零」
-         造成顶栏重新合成（视觉上闪一下） */
-      window.scrollTo(0, 0);
+      /* 先回顶部再重建：避免「整表被清空 → 内容高度塌缩 → 滚动位置被强制归零」 */
+      listWrapEl.scrollTo(0, 0);
       buildTable();
       updateSub();
       refreshFavCount();
@@ -1832,12 +1855,12 @@ body.sync-open #sync{display:flex}
       buildTable();                    /* 先把整表高度恢复，再同步跳回原位置 */
       updateSub();
       refreshFavCount();
-      window.scrollTo(0, mainScrollY);
+      listWrapEl.scrollTo(0, mainScrollY);
       requestAnimationFrame(function () {
         /* 惰性填充可能改变行高 → 仅当位置偏移明显时才再校正（避免二次闪动） */
         fillVisible();
-        var y = Math.min(mainScrollY, document.body.scrollHeight - window.innerHeight);
-        if (Math.abs(window.pageYOffset - y) > 2) window.scrollTo(0, y);
+        var y = Math.min(mainScrollY, listWrapEl.scrollHeight - listWrapEl.clientHeight);
+        if (Math.abs(listWrapEl.scrollTop - y) > 2) listWrapEl.scrollTo(0, y);
       });
     }
   });
@@ -1932,9 +1955,9 @@ body.sync-open #sync{display:flex}
     if (e.target.closest('#root-pop') || e.target.closest('.root-btn')) return;
     closeRootPop();
   });
-  window.addEventListener('scroll', function () {
+  listWrapEl.addEventListener('scroll', function () {
     if (document.body.classList.contains('root-open')) closeRootPop();
-  }, { passive: true, capture: true });   /* capture：收藏视图内部滚动也能关气泡 */
+  }, { passive: true });
 
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
@@ -2220,11 +2243,11 @@ body.sync-open #sync{display:flex}
     if (sheetOpen) { renderSummary(); renderRank(); }
     /* 收藏视图下同步到新的收藏集合 → 重建表格（尽量保持滚动位置） */
     if (favOnly) {
-      var y = window.pageYOffset;
+      var y = listWrapEl.scrollTop;
       buildTable();
       updateSub();
       requestAnimationFrame(function () {
-        window.scrollTo(0, Math.max(0, Math.min(y, document.body.scrollHeight - window.innerHeight)));
+        listWrapEl.scrollTo(0, Math.max(0, Math.min(y, listWrapEl.scrollHeight - listWrapEl.clientHeight)));
       });
     }
   }
