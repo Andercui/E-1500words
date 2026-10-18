@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="75c9044cdde0">
+<meta name="app-version" content="3edcc78f7b40">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -399,6 +399,7 @@ body.root-open #root-pop{display:block}
   max-height:min(78vh,700px);overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:6px 0;background:transparent;
+  --pill-y:0px;                        /* 当前 Unit 指示条的位移（由 JS 更新） */
 }
 /* 只有真的能滚动时才加“上下渐隐”，否则首尾的点会被无谓地淡化 */
 #unit-nav.can-scroll{
@@ -406,11 +407,20 @@ body.root-open #root-pop{display:block}
   mask-image:linear-gradient(180deg,transparent 0,#000 10px,#000 calc(100% - 10px),transparent 100%);
 }
 #unit-nav::-webkit-scrollbar{width:0}
-#unit-nav:empty{display:none}
+#unit-nav.empty{display:none}
 /* 贯穿所有点的细竖线 */
 #unit-nav::before{
   content:"";position:absolute;left:50%;top:10px;bottom:10px;width:1px;
   margin-left:-.5px;background:var(--text2);opacity:.18;pointer-events:none;
+}
+/* 唯一的「当前 Unit」指示条：整条导航里只有这一个元素，
+   靠 transform 移动（合成器动画，不触发重绘）—— iOS 上不会留下多条残影 */
+.un-pill{
+  position:absolute;left:50%;top:6px;margin-left:-1.5px;
+  width:3px;height:17px;border-radius:2px;background:var(--blue);
+  transform:translateY(var(--pill-y));
+  transition:transform .18s cubic-bezier(.32,.72,0,1);
+  will-change:transform;pointer-events:none;z-index:1;
 }
 .un-item{
   position:relative;display:flex;align-items:center;justify-content:center;
@@ -421,19 +431,18 @@ body.root-open #root-pop{display:block}
   content:"";
   width:5px;height:5px;border-radius:50%;
   background:var(--text2);opacity:.42;
-  transition:width .18s,height .18s,opacity .18s,background .18s;
+  transition:opacity .18s,background .18s;
 }
 .un-item.major::before{                /* 每 5 个 Unit：稍大 */
   width:6px;height:6px;opacity:.62;
 }
-.un-item:hover::before,.un-item:focus-visible::before{
-  opacity:.95;width:9px;height:9px;
+.un-item:not(.on):hover::before,.un-item:not(.on):focus-visible::before{
+  opacity:.95;
 }
-.un-item.on::before{                   /* 当前 Unit：竖向胶囊 */
-  width:3px;height:17px;border-radius:2px;background:var(--blue);opacity:1;
-  transition:none;                     /* 跳转时即时切换，避免胶囊“变形/淡出”看起来像闪 */
-}
-.un-item.on:hover::before{width:4px;height:17px;background:var(--blue)}
+/* 当前 Unit 的圆点让位给指示条 */
+.un-item.on::before{opacity:0}
+/* 「只看收藏」视图里不存在的 Unit：变淡且不可点 */
+.un-item.off{opacity:.25;pointer-events:none}
 /* 悬停/聚焦时右侧浮出的编号标签 */
 #un-tip{
   position:fixed;z-index:23;transform:translateY(-50%);
@@ -607,6 +616,7 @@ body.sync-open #sync{display:flex}
     -webkit-mask-image:none;mask-image:none;
   }
   #unit-nav::before{display:none}
+  .un-pill{display:none}
   body.nav-open #unit-nav{display:block}
   .un-item{
     display:flex;align-items:center;justify-content:center;
@@ -616,6 +626,7 @@ body.sync-open #sync{display:flex}
   .un-label{display:block;font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap}
   .un-item.on{background:var(--blue)}
   .un-item.on .un-label{color:#fff}
+  .un-item.off{display:none}
   #un-tip{display:none}
 }
 </style>
@@ -989,7 +1000,7 @@ body.sync-open #sync{display:flex}
   var favOnly = false;
   var sepEls = [];      // 当前视图的 Unit 标签元素（侧边导航跳转用）
   var sepTops = [];     // 各 Unit 标签的文档纵坐标（滚动高亮用）
-  var navActive = -1;
+  var navOnIdx = -1;    // 当前高亮按钮的索引（= unit-1；导航 DOM 常驻，不随视图重建）
   var navEl = document.getElementById('unit-nav');
 
   function buildTable() {
@@ -1001,7 +1012,7 @@ body.sync-open #sync{display:flex}
     rowRefs = {};
     sepEls = [];
     sepTops = [];
-    navActive = -1;
+    navOnIdx = -1;
 
     if (!ids.length) {
       var empty = document.createElement('div');
@@ -1062,30 +1073,58 @@ body.sync-open #sync{display:flex}
   var tipEl = document.getElementById('un-tip');
 
   function buildUnitNav() {
-    navEl.innerHTML = '';
-    hideUnTip();
-    for (var i = 0; i < sepEls.length; i++) {
-      var u = Number(sepEls[i].dataset.unit);
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'un-item' + (u % 5 === 0 ? ' major' : '');
-      b.dataset.i = i;
-      b.dataset.unit = u;
-      b.setAttribute('aria-label', '跳转到 Unit ' + u);
-      b.title = '';                       /* 用自己的浮标，避免系统 tooltip 延迟 */
-      var s = document.createElement('span');
-      s.className = 'un-label';
-      s.textContent = u + '-unit';
-      b.appendChild(s);
-      b.addEventListener('mouseenter', showUnTipFor);
-      b.addEventListener('mouseleave', hideUnTip);
-      b.addEventListener('focus', showUnTipFor);
-      b.addEventListener('blur', hideUnTip);
-      navEl.appendChild(b);
+    /* 导航常驻 PAGES 个点：切到「只看收藏」时不重建 DOM（只是把没有的 Unit 变淡），
+       避免整条侧栏在切换视图/滚动时反复重绘 —— iPad 上多重蓝条的根源。 */
+    if (navEl.children.length !== PAGES + 1) {   // children[0] 是唯一的指示条
+      navEl.innerHTML = '';
+      hideUnTip();
+      var pill = document.createElement('i');
+      pill.className = 'un-pill';
+      navEl.appendChild(pill);
+      for (var u = 1; u <= PAGES; u++) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'un-item' + (u % 5 === 0 ? ' major' : '');
+        b.dataset.unit = u;
+        b.setAttribute('aria-label', '跳转到 Unit ' + u);
+        b.title = '';                     /* 用自己的浮标，避免系统 tooltip 延迟 */
+        var s = document.createElement('span');
+        s.className = 'un-label';
+        s.textContent = u + '-unit';
+        b.appendChild(s);
+        b.addEventListener('mouseenter', showUnTipFor);
+        b.addEventListener('mouseleave', hideUnTip);
+        b.addEventListener('focus', showUnTipFor);
+        b.addEventListener('blur', hideUnTip);
+        navEl.appendChild(b);
+      }
+      navOnIdx = -1;
     }
+
+    /* 当前视图里存在哪些 Unit → 映射到 sepEls 索引；不存在则变淡禁用 */
+    var map = {};
+    for (var k = 0; k < sepEls.length; k++) map[Number(sepEls[k].dataset.unit)] = k;
+    for (var n = 1; n <= PAGES; n++) {
+      var btn = navEl.children[n];
+      var idx = map[n];
+      var off = (idx === undefined);
+      btn.dataset.i = off ? -1 : idx;
+      btn.classList.toggle('off', off);
+      btn.disabled = off;
+    }
+
+    navEl.classList.toggle('empty', !sepEls.length);
+    navEl.classList.toggle('can-scroll', navEl.scrollHeight > navEl.clientHeight + 2);
     measureUnits();
     updateNavActive();
-    navEl.classList.toggle('can-scroll', navEl.scrollHeight > navEl.clientHeight + 2);
+    /* 首次构建时布局可能还没稳定 → 下一帧强制重算一次指示条位置 */
+    requestAnimationFrame(function () {
+      navOnIdx = -1;
+      var prev = navEl.querySelector('.un-item.on');
+      if (prev) prev.classList.remove('on');
+      measureUnits();
+      updateNavActive();
+    });
   }
 
   /* 点阵很窄，编号靠悬停/聚焦时的浮标显示（右侧小胶囊） */
@@ -1115,31 +1154,43 @@ body.sync-open #sync{display:flex}
   }
 
   function updateNavActive() {
-    if (!sepTops.length) {
-      if (navActive !== -1) {
-        navActive = -1;
-        for (var k = 0; k < navEl.children.length; k++) navEl.children[k].classList.remove('on');
-      }
+    /* 当前 Unit → 按钮索引（按钮与 Unit 编号一一对应：索引 = unit-1）。
+       DOM 操作只有两处：给旧项 remove('on')、给新项 add('on')，
+       指示条则只用 transform 移动 → 合成器完成，不重绘，iOS 不会留残影。 */
+    var btnIdx = -1;
+    if (sepTops.length) {
+      var y = window.pageYOffset + topbarH() + 24;
+      var idx = 0;
+      for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
+      btnIdx = Number(sepEls[idx].dataset.unit) - 1;
+    }
+    if (btnIdx === navOnIdx) return;
+
+    var prev = navOnIdx >= 0 ? navEl.children[navOnIdx + 1] : null;
+    if (prev) prev.classList.remove('on');
+    navOnIdx = btnIdx;
+
+    if (btnIdx < 0) {                          /* 空列表：把指示条移出可见区 */
+      navEl.style.setProperty('--pill-y', '-40px');
       return;
     }
-    var y = window.pageYOffset + topbarH() + 24;
-    var idx = 0;
-    for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
-    if (idx === navActive) return;
-    navActive = idx;
-    for (var j = 0; j < navEl.children.length; j++) {
-      navEl.children[j].classList.toggle('on', j === idx);
+    var cur = navEl.children[btnIdx + 1];
+    if (cur) {
+      cur.classList.add('on');
+      /* 用实际矩形定位指示条（不依赖行高常量，也不受 padding 影响） */
+      var nr = navEl.getBoundingClientRect();
+      var cr = cur.getBoundingClientRect();
+      var y = (cr.top - nr.top + navEl.scrollTop + (cr.height - 17) / 2) - 6;
+      navEl.style.setProperty('--pill-y', Math.round(y * 10) / 10 + 'px');
     }
+
     /* 让高亮项保持在导航可视范围内（不要用 scrollIntoView：会带着整页滚）。
        导航不需要滚动时直接跳过，避免无谓的 scrollTop 写入触发重绘 */
-    if (navEl.scrollHeight > navEl.clientHeight + 2) {
-      var el = navEl.children[idx];
-      if (el) {
-        var t = el.offsetTop, h = el.offsetHeight;
-        if (t < navEl.scrollTop) navEl.scrollTop = Math.max(0, t - 6);
-        else if (t + h > navEl.scrollTop + navEl.clientHeight) {
-          navEl.scrollTop = t + h - navEl.clientHeight + 6;
-        }
+    if (cur && navEl.scrollHeight > navEl.clientHeight + 2) {
+      var t = cur.offsetTop, h = cur.offsetHeight;
+      if (t < navEl.scrollTop) navEl.scrollTop = Math.max(0, t - 6);
+      else if (t + h > navEl.scrollTop + navEl.clientHeight) {
+        navEl.scrollTop = t + h - navEl.clientHeight + 6;
       }
     }
   }
