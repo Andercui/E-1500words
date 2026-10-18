@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="1c52cea15092">
+<meta name="app-version" content="8626081530e3">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -1234,10 +1234,31 @@ body.sync-open #sync{display:flex}
     }
   }
 
-  /* 跳转到某个 Unit：
+  /* 当前视口顶部对应哪个 Unit（与导航高亮同一套算法） */
+  function currentUnitNo() {
+    if (!sepTops.length) return 0;
+    var y = listWrapEl.scrollTop + 24;
+    var idx = 0;
+    for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
+    return Number(sepEls[idx].dataset.unit);
+  }
+
+  /* 在当前视图的 Unit 里找「距离 fromUnit 最近」的那个（距离相同取较大的 Unit） */
+  function nearestUnitIndex(fromUnit) {
+    if (!sepEls.length) return -1;
+    var best = 0, bestD = Infinity;
+    for (var i = 0; i < sepEls.length; i++) {
+      var u = Number(sepEls[i].dataset.unit);
+      var d = Math.abs(u - fromUnit);
+      if (d < bestD || (d === bestD && u > Number(sepEls[best].dataset.unit))) {
+        best = i; bestD = d;
+      }
+    }
+    return best;
+  }
+  /* 跳转到某个 Unit（sepEls 索引）：
      表格是惰性填充的（行高随释义换行变化），跳过去后可能需要微调；
-     但**只在偏差明显时才二次滚动** —— 每帧无条件 scrollTo 会让 fixed 的
-     侧栏/顶栏在 iPad 上反复重绘（看起来像闪一下）。 */
+     但**只在偏差明显时才二次滚动**，避免每帧滚动引起反复重绘。 */
   function jumpToUnit(idx) {
     var sep = sepEls[idx];
     if (!sep) return;
@@ -1852,12 +1873,15 @@ body.sync-open #sync{display:flex}
     hideUnTip();
     if (!favOnly) {
       mainScrollY = listWrapEl.scrollTop;
+      /* 记住主表当前位置对应的 Unit，进入收藏后跳到「最近的有收藏的 Unit」 */
+      var fromUnit = currentUnitNo();
       favOnly = true;
-      /* 先回顶部再重建：避免「整表被清空 → 内容高度塌缩 → 滚动位置被强制归零」 */
-      listWrapEl.scrollTo(0, 0);
       buildTable();
       updateSub();
       refreshFavCount();
+      var t = nearestUnitIndex(fromUnit);
+      if (t >= 0) jumpToUnit(t);            /* 空收藏时 t=-1 → 停在该视图顶部 */
+      else listWrapEl.scrollTo(0, 0);
     } else {
       favOnly = false;
       buildTable();                    /* 先把整表高度恢复，再同步跳回原位置 */
