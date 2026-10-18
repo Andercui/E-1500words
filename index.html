@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="46409bd7bd08">
+<meta name="app-version" content="98bc688ca447">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -1473,6 +1473,40 @@ body.sync-open #sync{display:flex}
   }
 
   /* ================= 收藏 ================= */
+  /* 「只看收藏」视图里取消收藏：**局部摘掉这一行**（含变空的 Unit 块），不整表重建。
+     原因：iOS 上 tblEl.innerHTML='' + 大量新节点偶发「不重绘」，旧行会留着，
+     要等下次重新打开收藏页才消失；而且整表重建会让滚动位置跳一下。
+     返回 false 表示找不到行（调用方退回整表重建）。 */
+  function dropFavRow(id) {
+    var ref = rowRefs[id];
+    var row = ref && ref.row;
+    if (!row || !row.parentNode) return false;
+    var body = row.parentNode;
+    if (!body.classList || !body.classList.contains('unit-body')) return false;
+    var wasAbove = row.getBoundingClientRect().top < listWrapEl.getBoundingClientRect().top;
+    var h = row.offsetHeight || 0;
+    body.removeChild(row);
+    delete rowRefs[id];
+    if (!body.children.length) {
+      /* 该 Unit 已无收藏词 → 连标签一起去掉，并把 sepEls 同步好（导航据此变淡） */
+      var sep = body.previousElementSibling;
+      if (sep && sep.classList.contains('page-sep')) {
+        var i = sepEls.indexOf(sep);
+        if (i >= 0) { sepEls.splice(i, 1); sepTops.splice(i, 1); }
+        sep.parentNode.removeChild(sep);
+      }
+      body.parentNode.removeChild(body);
+    } else {
+      /* 建表时斑马纹按 i%2 分配，删行后会错位 → 本组重新分配 */
+      for (var k = 0; k < body.children.length; k++) {
+        body.children[k].classList.toggle('alt', k % 2 === 1);
+      }
+    }
+    /* 删掉的行在视口上方时，补偿它的高度，避免内容整体下移一行的距离 */
+    if (wasAbove) listWrapEl.scrollTop = Math.max(0, listWrapEl.scrollTop - h);
+    return true;
+  }
+
   function toggleFav(id) {
     if (favs[id]) delete favs[id]; else favs[id] = 1;
     persistFavs();
@@ -1482,13 +1516,20 @@ body.sync-open #sync{display:flex}
     markSyncDirty();
     var ref = rowRefs[id];
     if (ref && ref.star) ref.star.classList.toggle('on', !!favs[id]);
-    if (favOnly) {
-      /* 「只看收藏」视图里取消收藏 → 该行应消失：重建表格并保持滚动位置 */
-      var y = listWrapEl.scrollTop;
-      buildTable();
-      updateSub();
+    if (favOnly && !favs[id]) {
+      /* 「只看收藏」视图里取消收藏 → 该行必须立刻消失 */
+      var ok = false;
+      try { ok = dropFavRow(id); } catch (e) { ok = false; }
+      if (ok) {
+        if (!Object.keys(rowRefs).length) buildTable();   /* 全删光 → 换成空状态提示 */
+        else { buildUnitNav(); updateSub(); }               /* 导航 .off / 副标题同步 */
+      } else {
+        buildTable();                                     /* 兜底：退回整表重建 */
+        updateSub();
+      }
       requestAnimationFrame(function () {
-        listWrapEl.scrollTo(0, Math.max(0, Math.min(y, listWrapEl.scrollHeight - listWrapEl.clientHeight)));
+        var max = Math.max(0, listWrapEl.scrollHeight - listWrapEl.clientHeight);
+        if (listWrapEl.scrollTop > max) listWrapEl.scrollTo(0, max);
       });
     }
     refreshFavCount();
