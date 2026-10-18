@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="8626081530e3">
+<meta name="app-version" content="46409bd7bd08">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -1234,13 +1234,17 @@ body.sync-open #sync{display:flex}
     }
   }
 
-  /* 当前视口顶部对应哪个 Unit（与导航高亮同一套算法） */
+  /* 当前视口顶部对应哪个 Unit（与导航高亮同一套算法）。
+     这里**实时测量**而不用 sepTops 缓存：sepTops 只在滚动事件的 rAF 里刷新，
+     若用户在滚动惯性未停时就点 ★，缓存可能落后一帧甚至过期，导致算错 Unit。 */
   function currentUnitNo() {
-    if (!sepTops.length) return 0;
-    var y = listWrapEl.scrollTop + 24;
-    var idx = 0;
-    for (var i = 0; i < sepTops.length; i++) { if (sepTops[i] <= y) idx = i; }
-    return Number(sepEls[idx].dataset.unit);
+    if (!sepEls.length) return 0;
+    var line = listWrapEl.getBoundingClientRect().top + 24;
+    var unit = Number(sepEls[0].dataset.unit);
+    for (var i = 0; i < sepEls.length; i++) {
+      if (sepEls[i].getBoundingClientRect().top <= line) unit = Number(sepEls[i].dataset.unit);
+    }
+    return unit;
   }
 
   /* 在当前视图的 Unit 里找「距离 fromUnit 最近」的那个（距离相同取较大的 Unit） */
@@ -1256,9 +1260,12 @@ body.sync-open #sync{display:flex}
     }
     return best;
   }
-  /* 跳转到某个 Unit（sepEls 索引）：
-     表格是惰性填充的（行高随释义换行变化），跳过去后可能需要微调；
-     但**只在偏差明显时才二次滚动**，避免每帧滚动引起反复重绘。 */
+  /* 跳转到某个 Unit（sepEls 索引）。
+     两个坑：①表格是惰性填充的，滚过去后行被填充 → 行高变化 → 落点会漂；
+     ②iOS 上若用户手指刚抬起（惯性滚动仍在跑），程序化 scrollTop 会被惯性吞掉，
+       表现为「点了没反应 / 又弹回去」。
+     所以：只在偏差 >2px 时才写 scrollTop（避免每帧重绘），但**持续对齐约 0.4s**
+     （惯性会不断把位置带偏，我们每次都拉回来），直到连续 6 帧稳定才收工。 */
   function jumpToUnit(idx) {
     var sep = sepEls[idx];
     if (!sep) return;
@@ -1267,16 +1274,23 @@ body.sync-open #sync{display:flex}
       var base = listWrapEl.getBoundingClientRect().top;
       return Math.max(0, sep.getBoundingClientRect().top - base + listWrapEl.scrollTop - 6);
     }
-    listWrapEl.scrollTo(0, goal());
-    var n = 0;
-    (function settle() {
-      fillVisible();
+    function apply() {                    // 对齐一次；返回是否已对齐
       var g = goal();
       if (Math.abs(g - listWrapEl.scrollTop) > 2) listWrapEl.scrollTo(0, g);
-      if (++n < 3) { requestAnimationFrame(settle); return; }
+      return Math.abs(g - listWrapEl.scrollTop) <= 2;
+    }
+    apply();
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var stable = 0;
+    function settle() {
+      fillVisible();                      // 惰性填充会让落点漂移 → 每帧补一次
+      if (apply()) stable++; else stable = 0;
+      var t = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0;
+      if ((t < 420 || stable < 6) && t < 1200) { requestAnimationFrame(settle); return; }
       measureUnits();
-      updateNavActive();
-    })();
+      updateNavActive();                  // 落定后按真实位置同步侧栏高亮
+    }
+    requestAnimationFrame(settle);
     closeNavDrawer();                     // 窄屏点击后自动收起
   }
 
@@ -1879,6 +1893,8 @@ body.sync-open #sync{display:flex}
       buildTable();
       updateSub();
       refreshFavCount();
+      /* 收藏内容不足一屏时（常见：收藏集中在 1~3 个 Unit）本来就滚不动，
+         此时 jumpToUnit 自然停在顶部，不算失败。 */
       var t = nearestUnitIndex(fromUnit);
       if (t >= 0) jumpToUnit(t);            /* 空收藏时 t=-1 → 停在该视图顶部 */
       else listWrapEl.scrollTo(0, 0);
