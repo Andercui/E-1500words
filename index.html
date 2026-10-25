@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="f95650b40e69">
+<meta name="app-version" content="a5d676532615">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -542,15 +542,16 @@ body.art-open #art{transform:none;visibility:visible;transition:transform .28s c
 .art-body p{margin:0}
 .art-en{
   margin:0 0 .55em;
-  font:17px/1.95 Georgia,"Songti SC","Times New Roman",serif;color:var(--text);
+  font:18px/1.95 Georgia,"Songti SC","Times New Roman",serif;color:var(--text);
 }
 .art-zh{
   margin:0 0 1.6em;
-  font:15px/2 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:var(--text2);
+  font:16px/2 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:var(--text2);
 }
 .art-ph{font:15px/1.9 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:var(--text2);margin:0}
+/* 英文段里的目标词：只保留下划线，不改变颜色 */
 .art-w{
-  color:var(--blue);text-decoration:underline;text-decoration-thickness:1px;
+  color:inherit;text-decoration:underline;text-decoration-thickness:1px;
   text-underline-offset:3px;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 .art-w:active{background:var(--blue-tint);border-radius:4px}
