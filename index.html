@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="a5d676532615">
+<meta name="app-version" content="8c2c46b53ebb">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -540,8 +540,12 @@ body.art-open #art{transform:none;visibility:visible;transition:transform .28s c
   padding:20px clamp(20px,7vw,96px) calc(40px + env(safe-area-inset-bottom));
 }
 .art-body p{margin:0}
+/* 需要比 .art-body p 更高优先级，否则 margin 被覆盖成 0 */
+.art-body p.art-en{margin:0 0 1.9em}   /* ≈ 一行（line-height 1.95）空白 */
+.art-body p.art-zh{margin:0 0 1.6em}
 .art-en{
-  margin:0 0 .55em;
+  /* 与下方译文之间留出约一行（行高 1.95）的空白 */
+  margin:0 0 1.9em;
   font:18px/1.95 Georgia,"Songti SC","Times New Roman",serif;color:var(--text);
 }
 .art-zh{
@@ -555,10 +559,9 @@ body.art-open #art{transform:none;visibility:visible;transition:transform .28s c
   text-underline-offset:3px;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 .art-w:active{background:var(--blue-tint);border-radius:4px}
-/* 译文里的对应词：只保留下划线，不标蓝 */
+/* 译文里的对应词：不标蓝、不加下划线（不抢阅读），仍可点开释义 */
 .art-tw{
-  text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;
-  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;
 }
 #art-tip{
   position:fixed;z-index:80;display:none;width:min(360px,calc(100vw - 32px));
