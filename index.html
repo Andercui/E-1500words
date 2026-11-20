@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="format-detection" content="telephone=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="3045e0fcc4e5">
+<meta name="app-version" content="0f03345243f4">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -112,6 +112,8 @@
   --bg:#f2f2f7; --card:#fff; --text:#1c1c1e; --text2:#6e6e73;
   --sep:rgba(60,60,67,.16);
   --bar-solid:#f2f2f7;
+  /* 底部安全区：已去掉 viewport-fit=cover，env() 会返回 0，所以给一个下限兜底 */
+  --safe-b:max(env(safe-area-inset-bottom), 16px);
   --blue:#007aff; --blue-tint:rgba(0,122,255,.12);
   --red:#ff3b30;
   --zebra-a:#ffffff; --zebra-b:#e6e6e6;
@@ -442,7 +444,7 @@ body.root-open #root-pop{display:block}
    与 PDF 复刻的细线表格风格一致。
    窄屏（≤560px）自动折叠为左下角按钮 + 文字列表抽屉（规则见样式表末尾）。 */
 #nav-toggle{
-  position:fixed;left:8px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:22;
+  position:fixed;left:8px;bottom:var(--safe-b);z-index:22;
   display:none;box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
 #unit-nav{
@@ -618,7 +620,7 @@ body.sheet-open #sheet{transform:none}
 .r-empty{padding:26px 0;text-align:center;color:var(--text2);font-size:14px}
 .s-foot{
   flex:0 0 auto;border-top:.5px solid var(--sep);
-  padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  padding:12px 18px var(--safe-b);
   display:flex;flex-direction:column;gap:12px;background:var(--bg);
 }
 .switch-line{display:flex;align-items:center;justify-content:space-between;font-size:14px;cursor:pointer}
