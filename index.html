@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="4a3144edf2e3">
+<meta name="app-version" content="3045e0fcc4e5">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -111,7 +111,6 @@
   color-scheme:light dark;
   --bg:#f2f2f7; --card:#fff; --text:#1c1c1e; --text2:#6e6e73;
   --sep:rgba(60,60,67,.16);
-  --bar-bg:rgba(242,242,247,.85);
   --bar-solid:#f2f2f7;
   --blue:#007aff; --blue-tint:rgba(0,122,255,.12);
   --red:#ff3b30;
@@ -189,6 +188,8 @@ body{
   padding:calc(env(safe-area-inset-top) + 8px) clamp(36px,8vw,112px) 10px;
   background:#f2f2f7;
   border-bottom:.5px solid var(--sep);
+  /* 顶栏必须完全不透明：显式关掉任何毛玻璃/滤镜，避免内容透出与重绘闪烁 */
+  -webkit-backdrop-filter:none;backdrop-filter:none;filter:none;opacity:1;
   /* 让顶栏成为最后一个绘制的“普通”元素：不建合成层，避免与滚动层抢顺序 */
   -webkit-transform:none;transform:none;
 }
