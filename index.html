@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="b7a2a8dc6234">
+<meta name="app-version" content="0d17c8a35635">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -333,8 +333,10 @@ body.defshow .row .cell-d{display:flex}
    注：用 opacity 而非 visibility —— iPad Safari 上 visibility 切换偶发不重绘
    （需切屏回来才显示），opacity 为合成属性，配合 applyModeToRows 的强制 reflow 稳定刷新 */
 .row.whide .cell-w .w{opacity:0}
-/* 音标跟随英文单词：隐藏单词时音标一起隐藏 */
-.row.whide .d-phon{opacity:0}
+/* 音标跟随英文单词：隐藏单词时音标一起隐藏；
+   同时把它的宽度收起（width:0），否则各词音标长度不同，
+   会把后面的汉语释义推出参差不齐的左边缘 —— 收起后各行的释义左边缘对齐 */
+.row.whide .d-phon{opacity:0;flex:0 0 0;width:0;overflow:hidden}
 /* 隐藏汉语释义时只隐藏词性+翻译，音标保留 */
 .row.rhide .d-defs{opacity:0}
 /* 左列右侧分隔线（单词|释义 之间）：与行间线同色，加强表格感 */
@@ -361,7 +363,9 @@ body.showcounts .badge:not(:empty){display:inline-block}
 .row.open .cell-d{display:flex;animation:fadeIn .18s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .d-flow{flex:1 1 auto;display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden}
-.d-phon{flex:0 0 auto;color:var(--text2)}
+/* 音标列统一宽度（--phon-w 由 initPhonWidth() 按词库最长音标量出）：
+   否则各词音标长短不一，后面汉语释义的左边缘会参差不齐 */
+.d-phon{flex:0 0 var(--phon-w,auto);width:var(--phon-w,auto);overflow:hidden;white-space:nowrap;color:var(--text2)}
 .d-defs{flex:0 1 auto;display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden}
 .def-line{display:flex;align-items:baseline;gap:5px;min-width:0}
 .def-line .def{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2679,7 +2683,26 @@ body.sync-open #sync{display:flex}
     if (banner.dataset.kind === 'tip') lsSet(LS_TIP, '1');
   });
 
+  /* 统一音标列宽：让每行的汉语释义左边缘对齐（音标长短不再影响后面文字位置）。
+     用 canvas 按表格实际字体量出本词库中最宽的 [音标]，写入 --phon-w。 */
+  function initPhonWidth() {
+    try {
+      var cs = getComputedStyle(tblEl);
+      var font = cs.font || (cs.fontSize + ' ' + cs.fontFamily);
+      var ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = font;
+      var max = 0;
+      for (var i = 0; i < WORDS.length; i++) {
+        var t = '[' + (WORDS[i].phonetic || '') + ']';
+        var w = ctx.measureText(t).width;
+        if (w > max) max = w;
+      }
+      if (max > 0) tblEl.style.setProperty('--phon-w', Math.ceil(max + 3) + 'px');
+    } catch (e) { }
+  }
+
   syncTopbarH();
+  initPhonWidth();
   buildTable();                     /* 首次渲染（全部单词） */
   applyDefShowBtn();
   applyCountsBtn();
