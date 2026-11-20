@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<meta name="app-version" content="0f03345243f4">
+<meta name="app-version" content="b7a2a8dc6234">
 <script>
 (function () {
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
@@ -327,13 +327,16 @@ body{
 /* 默认显示模式：所有行直接显示内容（滚动懒加载填充） */
 body.defshow .row .cell-d{display:flex}
 /* 两侧显隐（点击独立切换；均保留列宽；读音按钮常显、不参与切换）：
-   · .whide = 隐藏左侧单词
-   · .rhide = 隐藏右侧（音标+词性+翻译）
+   · .whide = 隐藏左侧单词（音标随之隐藏）
+   · .rhide = 隐藏右侧汉语释义（词性+翻译），**保留音标**
    三态模式 = 给所有行批量设置这两个类（left→rhide；right→whide；both→无）
    注：用 opacity 而非 visibility —— iPad Safari 上 visibility 切换偶发不重绘
    （需切屏回来才显示），opacity 为合成属性，配合 applyModeToRows 的强制 reflow 稳定刷新 */
 .row.whide .cell-w .w{opacity:0}
-.row.rhide .d-flow{opacity:0}
+/* 音标跟随英文单词：隐藏单词时音标一起隐藏 */
+.row.whide .d-phon{opacity:0}
+/* 隐藏汉语释义时只隐藏词性+翻译，音标保留 */
+.row.rhide .d-defs{opacity:0}
 /* 左列右侧分隔线（单词|释义 之间）：与行间线同色，加强表格感 */
 .cell-w{
   display:flex;align-items:center;gap:8px;padding:0 12px;min-width:0;
@@ -763,7 +766,7 @@ body.sync-open #sync{display:flex}
     <button id="btn-counts" class="icon-btn" aria-label="显示点击次数" title="显示/隐藏点击次数">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></svg>
     </button>
-    <button id="btn-defshow" class="icon-btn on" aria-label="显示模式：仅左侧（英语单词）（点按切换）" title="切换显示模式（左侧单词 / 右侧释义 / 两侧一起）">
+    <button id="btn-defshow" class="icon-btn on" aria-label="显示模式：仅左侧（单词+音标）（点按切换）" title="切换显示模式（左侧单词+音标 / 右侧词性+翻译 / 两侧一起）">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg>
     </button>
     <button id="btn-stats" class="icon-btn" aria-label="点击统计">
@@ -1672,8 +1675,8 @@ body.sync-open #sync{display:flex}
 
   /* ================= 显示模式（顶栏三态开关） =================
      三态含义（按表格两列划分，两列宽度始终保留）：
-       left  = 仅左侧：只显示英文单词（隐藏右列音标+词性+翻译）
-       right = 仅右侧：只显示音标+词性+翻译（隐藏单词文字，左列宽度保留）
+       left  = 仅左侧：显示英文单词 + 音标（隐藏词性与翻译）
+       right = 仅右侧：显示词性 + 翻译（隐藏单词文字，音标随之隐藏，左列宽度保留）
        both  = 两侧一起（全部显示）
      模式循环：left → right → both → left …
      图标：左块实心=仅左侧（单词） / 右块实心=仅右侧（音标+词性+翻译） / 双块实心=两侧一起 */
@@ -1686,7 +1689,7 @@ body.sync-open #sync{display:flex}
   var SVG_LEFT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="13" y="5" width="8" height="14" rx="1.5"/></svg>';
   var SVG_RIGHT = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/></svg>';
   var SVG_BOTH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="13" y="5" width="8" height="14" rx="1.5" fill="currentColor" stroke="none"/></svg>';
-  var DEFMODE_LABEL = { left: '仅左侧（英语单词）', right: '仅右侧（音标+词性+翻译）', both: '两侧一起' };
+  var DEFMODE_LABEL = { left: '仅左侧（单词+音标）', right: '仅右侧（词性+翻译）', both: '两侧一起' };
   var DEFMODE_HINT = { left: '单词', right: '释义', both: '单词与释义' };
 
   function applyDefShowBtn() {
